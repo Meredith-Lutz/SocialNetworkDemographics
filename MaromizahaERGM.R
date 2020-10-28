@@ -7,20 +7,20 @@ library(chron)
 library(stringr)
 library(EloRating)
 
-#Test 
-
-# HI
-
+## FIX THIS ##
 setwd('G:/My Drive/Graduate School/Research/Projects/NetworkDemographics')
 
+## FIX THIS ##
 ## Source functions
 source('G:/My Drive/Graduate School/Research/Projects/TemporalNets/SeasonalNetworkAnalyses/createNetworkFunction.R') #Edge weights are either counts or duration
 source('G:/My Drive/Graduate School/Research/Projects/TemporalNets/SeasonalNetworkAnalyses/createObsMatrix.R')
 source('G:/My Drive/Graduate School/Research/AO/CleanAOData/CleanAOData/CleanSocialDataFunctions.R')
 
+## FIX THIS ##
 demo		<- read.csv('G:/My Drive/Graduate School/Research/FieldSeason2019MF/Demographic Data/demographicData.csv')
 demo		<- demo[order(demo$ID),]
 
+## FIX THIS ##
 ## Connect to database
 drv	<- dbDriver('PostgreSQL') ##Be sure to use real database name
 con	<- dbConnect(drv, dbname = 'diadema_fulvus', host = 'localhost', port = 5432,
@@ -256,20 +256,99 @@ set.edge.value(d3plynet, 'logObs', log(60*allObsMatList[[2]]))
 ##############
 ### ERGM's ###
 ##############
+startTimeModel1	<- Sys.time()
 
 model1	<- ergm(d2plynet ~ sum + mutual(form = 'min') + nonzero + transitiveweights('min', 'max', 'min') + nodefactor('sex', form = 'sum') +
 	nodematch('sex', form = 'sum') + edgecov(d2plynet, 'agediff', form = 'sum') + nodefactor('age', form = 'sum') + 
 	edgecov(d2plynet, 'rankdiff', form = 'sum') + nodecov('elo', form = 'sum') + edgecov(d2plynet, 'grm', form = 'sum') + edgecov(d2plynet, 'logObs', form = 'sum'), response = 'numply', reference = ~Poisson,
 	control = control.ergm(MCMC.interval = 1000, MCMLE.maxit = 200, init.method = 'CD', MCMC.samplesize = 1000, seed = 32164))
 
+endTimeModel1	<- Sys.time()
+print('Run time for model 1 was', endTimeModel1 - startTimeModel1)
+
 summary(model2)
 mcmc.diagnostics(model2)
 
+startTimeModel2	<- Sys.time()
+
+simulatedModelsd2 <- simulate(model1, nsim = 1000, statsonly = TRUE)
+obsStatsd2		<- summary(d2plynet ~ sum + mutual(form = 'min') + nonzero + transitiveweights('min', 'max', 'min') + nodefactor('sex', form = 'sum') +
+				nodematch('sex', form = 'sum') + edgecov(d2plynet, 'agediff', form = 'sum') + nodefactor('age', form = 'sum') + 
+				edgecov(d2plynet, 'rankdiff', form = 'sum') + nodecov('elo', form = 'sum') + edgecov(d2plynet, 'grm', form = 'sum') + edgecov(d2plynet, 'logObs', form = 'sum'), response = 'numply')
+
+png('model1MCMC1.png', width = 4.41, height = 2.5, unit = 'in', res = 300)
+par(mar = c(2.5, 2.5, 0.5, 0.5), oma = c(1, 1, 1, 1))
+plot(model1$sample[,1:3], main = '', xlab = '', cex.axis = 0.75)
+dev.off()
+
+png('model1MCMC2.png', width = 4.41, height = 2.5, unit = 'in', res = 300)
+par(mar = c(2.5, 2.5, 0.5, 0.5), oma = c(1, 1, 1, 1))
+plot(model1$sample[,4:6], main = '', xlab = '', cex.axis = 0.75)
+dev.off()
+
+png('model1MCMC3.png', width = 4.41, height = 2.5, unit = 'in', res = 300)
+par(mar = c(2.5, 2.5, 0.5, 0.5), oma = c(1, 1, 1, 1))
+plot(model1$sample[,7:9], main = '', xlab = '', cex.axis = 0.75)
+dev.off()
+
+png('model1MCMC4.png', width = 4.41, height = 2.5, unit = 'in', res = 300)
+par(mar = c(2.5, 2.5, 0.5, 0.5), oma = c(1, 1, 1, 1))
+plot(model1$sample[,10:12], main = '', xlab = '', cex.axis = 0.75)
+dev.off()
+
+png('model1MCMC5.png', width = 4.41, height = 2.5, unit = 'in', res = 300)
+par(mar = c(2.5, 2.5, 0.5, 0.5), oma = c(1, 1, 1, 1))
+plot(model1$sample[,13], main = '', xlab = '', cex.axis = 0.75)
+dev.off()
+
+png('model1GOF.png', width = 5.07, height = 9.21, unit = 'in', res = 300)
+par(mfrow = c(4, 4), mar = c(2.5, 2.5, 0.5, 0.5), oma = c(1, 1, 1, 1))
+for(i in 1:13){
+plot(density(simulatedModelsd2[,i]), xlab = '', main = '', cex.axis = 0.75)
+	abline(v = obsStatsd2[i])
+}
+dev.off()
 
 model2	<- ergm(d3plynet ~ sum + mutual(form = 'min') + nonzero + transitiveweights('min', 'max', 'min') + nodefactor('sex', form = 'sum') +
 	nodematch('sex', form = 'sum') + edgecov(d3plynet, 'agediff', form = 'sum') + nodefactor('age', form = 'sum') + 
 	edgecov(d3plynet, 'rankdiff', form = 'sum') + nodecov('elo', form = 'sum') + edgecov(d3plynet, 'grm', form = 'sum') + edgecov(d3plynet, 'logObs', form = 'sum'), response = 'numply', reference = ~Poisson,
 	control = control.ergm(MCMC.interval = 1000, MCMLE.maxit = 200, init.method = 'CD', MCMC.samplesize = 1000, seed = 32164))
 
+endTimeModel2	<- Sys.time()
+print('Run time for model 2 was', endTimeModel2 - startTimeModel2)
+
 summary(model2)
 mcmc.diagnostics(model2)
+
+simulatedModelsd3 <- simulate(model2, nsim = 1000, statsonly = TRUE)
+obsStatsd3		<- summary(d3plynet ~ sum + mutual(form = 'min') + nonzero + transitiveweights('min', 'max', 'min') + nodefactor('sex', form = 'sum') +
+	nodematch('sex', form = 'sum') + edgecov(d3plynet, 'agediff', form = 'sum') + nodefactor('age', form = 'sum') + 
+	edgecov(d3plynet, 'rankdiff', form = 'sum') + nodecov('elo', form = 'sum') + edgecov(d3plynet, 'grm', form = 'sum') + edgecov(d3plynet, 'logObs', form = 'sum'), response = 'numply')
+
+png('model2MCMC1.png', width = 4.41, height = 2.5, unit = 'in', res = 300)
+par(mar = c(2.5, 2.5, 0.5, 0.5), oma = c(1, 1, 1, 1))
+plot(model2$sample[,1:3], main = '', xlab = '', cex.axis = 0.75)
+dev.off()
+
+png('model2MCMC2.png', width = 4.41, height = 2.5, unit = 'in', res = 300)
+par(mar = c(2.5, 2.5, 0.5, 0.5), oma = c(1, 1, 1, 1))
+plot(model2$sample[,4:6], main = '', xlab = '', cex.axis = 0.75)
+dev.off()
+
+png('model2MCMC3.png', width = 4.41, height = 2.5, unit = 'in', res = 300)
+par(mar = c(2.5, 2.5, 0.5, 0.5), oma = c(1, 1, 1, 1))
+plot(model2$sample[,7:9], main = '', xlab = '', cex.axis = 0.75)
+dev.off()
+
+png('model2MCMC4.png', width = 4.41, height = 2.5, unit = 'in', res = 300)
+par(mar = c(2.5, 2.5, 0.5, 0.5), oma = c(1, 1, 1, 1))
+plot(model2$sample[,10:12], main = '', xlab = '', cex.axis = 0.75)
+dev.off()
+
+png('model2GOF.png', width = 5.07, height = 9.21, unit = 'in', res = 300)
+par(mfrow = c(4, 3), mar = c(2.5, 2.5, 0.5, 0.5), oma = c(1, 1, 1, 1))
+for(i in 1:12){
+plot(density(simulatedModelsd3[,i]), xlab = '', main = '', cex.axis = 0.75)
+	abline(v = obsStatsd3[i])
+}
+dev.off()
