@@ -266,8 +266,8 @@ model1	<- ergm(d2plynet ~ sum + mutual(form = 'min') + nonzero + transitiveweigh
 endTimeModel1	<- Sys.time()
 print('Run time for model 1 was', endTimeModel1 - startTimeModel1)
 
-summary(model2)
-mcmc.diagnostics(model2)
+summary(model1)
+mcmc.diagnostics(model1)
 
 startTimeModel2	<- Sys.time()
 
