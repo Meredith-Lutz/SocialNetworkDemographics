@@ -143,6 +143,9 @@ nn$season	<- ifelse(nn$monthNum <= 3, 'mating',
 			ifelse(nn$monthNum >= 4 & nn$month <= 6, 'gestation',
 			ifelse(nn$monthNum >= 7 & nn$month <= 9, 'birthing', 'lactation')))
 
+nn$Group	<- as.character(nn$Group)
+nn$Nearest.neighbor	<- as.character(nn$Nearest.neighbor)
+
 nnNoSol		<- nn[nn$Group %in% c('I', 'II', 'III', 'IV', 'V', 'VI', 'XI', 'XII') & nn$Exclude_for_Analysis != 'Yes' & nn$Focal != nn$Nearest.neighbor,]
 nnNoSol$sliceID	<- paste(nnNoSol$Group, nnNoSol$Year, nnNoSol$season, sep = '-')
 
@@ -162,7 +165,9 @@ listNets	<- list()
 for(i in sliceIDs){
 	print(paste('Working on', i))
 	data		<- nnNoUnmarked[nnNoUnmarked$sliceID == i & is.na(nnNoUnmarked$cleanedNNDist) == FALSE & nnNoUnmarked$nnWithinGroup != '',]
-	animals	<- sort(unique(c(data[,c('Focal')], data[,c('nnWithinGroup')])))
+	focals	<- as.character(unique(data[,c('Focal')]))
+	nns		<- as.character(unique(data[,c('nnWithinGroup')]))
+	animals	<- sort(unique(c(focals, nns)))
 	if(i == 'XI-birthing-2019'){ #This deals with the weird IGE/wrong focal name issue
 		animals	<- c('Albert', 'Barea', 'Syrup')
 	}
@@ -192,22 +197,39 @@ for(i in sliceIDs){
 
 edgeDiffSummary	<- data.frame(group = character(), period = character(), year = character(), nAnimals = numeric(), edgeDiff = numeric())
 for(i in 1:length(listNets)){
+	#print(names(listNets)
 	group		<- str_split(names(listNets)[i], '-')[[1]][1]
+	#print(class(group))
 	year		<- str_split(names(listNets)[i], '-')[[1]][2]
+	#print(class(year))
 	season	<- str_split(names(listNets)[i], '-')[[1]][3]
 	noDiag	<- diag.remove(listNets[[i]])
 	edgeDiff	<- sd(noDiag, na.rm = TRUE)/mean(noDiag, na.rm = TRUE)
 	n		<- dim(noDiag)[1]
+	#print(class(n))
+	#print(class(edgeDiff))
 	line		<- c(group, season, year, as.numeric(n), as.numeric(edgeDiff))
 	edgeDiffSummary	<- rbind(edgeDiffSummary, line)
+	colnames(edgeDiffSummary)	<- c('group', 'period', 'year', 'nAnimals', 'edgeDiff')
+	edgeDiffSummary$group		<- as.character(edgeDiffSummary$group)	
+	edgeDiffSummary$year		<- as.character(edgeDiffSummary$year)	
+	edgeDiffSummary$period		<- as.character(edgeDiffSummary$period)	
+	edgeDiffSummary$nAnimals	<- as.character(edgeDiffSummary$nAnimals)	
+	edgeDiffSummary$edgeDiff	<- as.character(edgeDiffSummary$edgeDiff)	
+
 }
 
 colnames(edgeDiffSummary)	<- c('group', 'season', 'year', 'n', 'edgeDiff')
 edgeDiffSummary$n			<- as.numeric(edgeDiffSummary$n)
-edgeDiffSummary$edgeDiff	<- as.numeric(edgeDiffSummary$edgeDiff)	
+edgeDiffSummary$edgeDiff	<- as.numeric(edgeDiffSummary$edgeDiff)
 
-png('edgeDiffGraph.png', height = 6, width = 6, units = 'in', res = 300)
-plot(edgeDiffSummary$n, edgeDiffSummary$edgeDiff, pch = 16, xlab = 'Number of Animals in Group', ylab = 'Coefficient of Variation in Edge Weights')
+model1	<- lme(edgeDiff ~ n, random = ~ 1|group, data = edgeDiffSummary)
+xs		<- seq(3, 7, by = .05)
+ys		<- model1$coef$fixed[1] + model1$coef$fixed[2]*xs	
+
+pdf('edgeDiffGraph.pdf', height = 6, width = 6)
+plot(edgeDiffSummary$n, edgeDiffSummary$edgeDiff, pch = 16, cex.lab = 1.25, xlab = 'Number of Animals in Group', ylab = 'Coefficient of Variation in Edge Weights')
+points(xs, ys, type = 'l', lty = 2, lwd = 2, col = 'midnightblue')
 dev.off()
 
 means	<- aggregate(edgeDiffSummary[, 'edgeDiff'], by = list(edgeDiffSummary[,'n']), FUN = mean)
