@@ -72,19 +72,50 @@ for(i in uniqueDays) {
 ##############################################
 ### Write Functions for Migration Analysis ###
 ##############################################
-pullTimePeriods	<- function(socialData, migrationEvent, timeWindow,group) {
+pullTimePeriods	<- function(socialData, migrationEventDate, timeWindow,group) {
+	migrationEventDate	<- as.Date(migrationEventDate)
+	socialData$date	<- as.Date(socialData$date)
 	socialDataSub	<- socialData[socialData$group == group,] 
-	startDate		<- migrationEvent - timeWindow
-	endDate		<- migrationEvent + timeWindow
-	preData		<- socialDataSub[socialDataSub$date >= startDate & socialDataSub$date <= migrationEvent, ]
-	postData		<- socialDataSub[socialDataSub$date >= migrationEvent & socialDataSub$date <= postData,]
+	startDate		<- migrationEventDate - timeWindow
+	endDate		<- migrationEventDate + timeWindow
+	preData		<- socialDataSub[socialDataSub$date >= startDate & socialDataSub$date <= migrationEventDate, ]
+	postData		<- socialDataSub[socialDataSub$date >= migrationEventDate & socialDataSub$date <= postData,]
 	return(list(preData,postData)
 }
 
-#For loop day
-	#for loop group
-		#Use groups file to pull list of animals 
-		#Use paste functions with collapse = Null string to concatenate animals 
-		#Look for days where string is not the same
 
+groupStrings	<- data.frame()
+
+for (i in uniqueDays){
+	groupsObserved	<- unique(groups[groups$date == i, "group"])
+	for (j in groupsObserved){
+		animals	<- groups[groups$date == i & groups$group == j,"animal"]
+		animalsCat	<- paste(animals,collapse = "")
+		newLine	<- cbind.data.frame(i,j,animalsCat)
+		groupStrings	<- rbind.data.frame(groupStrings,newLine)
+	}
+}
+
+
+groupStrings	<- groupStrings[order(groupStrings$j,groupStrings$i),]
+groupStrings$i	<- as.Date(groupStrings$i)
+groupChangesSummary	<- data.frame()
+for (j in unique(groupStrings$j)){
+	groupSubset	<- groupStrings[groupStrings$j == j,]
+	if (dim(groupSubset)[1] == 1){
+		next
+	}
+	for (k in 2:dim(groupSubset)[1]){
+		groupStringK	<- groupStrings[k-1,3]	
+		groupStringK_1	<- groupStrings[k,3]
+		dateK			<- groupStrings[k-1,1]
+		dateK_1		<- groupStrings[k,1]
+		if (groupStringK != groupStringK_1){
+			groupChangeLine	<- cbind.data.frame(j,dateK,dateK_1,groupStringK,groupStringK_1)
+			groupChangesSummary	<- rbind.data.frame(groupChangesSummary,groupChangeLine)	
+		}
+	}
+}
+
+write.csv(groupChangesSummary, "groupChangesSummary.csv", row.names=FALSE)
 
