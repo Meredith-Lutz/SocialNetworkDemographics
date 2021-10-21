@@ -100,22 +100,33 @@ for (i in uniqueDays){
 groupStrings	<- groupStrings[order(groupStrings$j,groupStrings$i),]
 groupStrings$i	<- as.Date(groupStrings$i)
 groupChangesSummary	<- data.frame()
-for (j in unique(groupStrings$j)){
-	groupSubset	<- groupStrings[groupStrings$j == j,]
+
+groupStringsXII	<- groupStrings[groupStrings$j == "XII",]
+groupStringsI	<- groupStrings[groupStrings$j == "I",]
+groupStringsII	<- groupStrings[groupStrings$j == "II",]
+groupStringsIII	<- groupStrings[groupStrings$j == "III",]
+groupStringsIV	<- groupStrings[groupStrings$j == "IV",]
+groupStringsV	<- groupStrings[groupStrings$j == "V",]
+groupStringsVI	<- groupStrings[groupStrings$j == "VI",]
+groupStringsXI	<- groupStrings[groupStrings$j == "XI",]
+
+for (j in unique(groupStringsXI$j)){
+	groupSubset	<- groupStringsXI[groupStringsXI$j == j,]
 	if (dim(groupSubset)[1] == 1){
 		next
 	}
 	for (k in 2:dim(groupSubset)[1]){
-		groupStringK	<- groupStrings[k-1,3]	
-		groupStringK_1	<- groupStrings[k,3]
-		dateK			<- groupStrings[k-1,1]
-		dateK_1		<- groupStrings[k,1]
+		groupStringK	<- groupStringsXI[k-1,3]	
+		groupStringK_1	<- groupStringsXI[k,3]
+		dateK			<- groupStringsXI[k-1,1]
+		dateK_1		<- groupStringsXI[k,1]
 		if (groupStringK != groupStringK_1){
 			groupChangeLine	<- cbind.data.frame(j,dateK,dateK_1,groupStringK,groupStringK_1)
 			groupChangesSummary	<- rbind.data.frame(groupChangesSummary,groupChangeLine)	
-		}
+		} 	
 	}
+	
 }
 
-write.csv(groupChangesSummary, "groupChangesSummary.csv", row.names=FALSE)
+write.csv(groupChangesSummary, "groupChangesSummaryXI.csv", row.names=FALSE)
 
