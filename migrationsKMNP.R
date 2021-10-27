@@ -7,7 +7,7 @@ setwd("C:/Users/cecil/OneDrive/Desktop/SDC Work")
 socialDataRaw		<- read.csv('All_nonSuppStudent_Social_Data_through_2019_2021_07_09_ML_BL edits for NSFanalysis_Francis duplicates deleted_Jul262021_MLEdits.csv', stringsAsFactors = FALSE)
 matingSeasonStudent 	<- read.csv('studentMatingSeason_BL updates Jul232021_MLEdits.csv', stringsAsFactors = FALSE)
 laura				<- read.csv('Master file of Laura focal activity data.csv', stringsAsFactors = FALSE)
-groups			<- read.csv('Compiled Group File with some data deleted for BL analysis_Sept 2021.csv', stringsAsFactors = FALSE)
+groups			<- read.csv('Compiled Group File with some data deleted for BL analysis_Oct 14 2021_corrected2.csv', stringsAsFactors = FALSE)
 nnFocalList			<- read.csv('focal.ids.nn_tmm_25sep2021.csv', stringsAsFactors = FALSE)
 actvFocalList		<- read.csv('focal.ids.actv_tmm_25sep2021.csv', stringsAsFactors = FALSE)
 filemakerFocalList	<- read.csv('FileMakerIDs_ML_11Oct2021.csv', stringsAsFactors = FALSE)
@@ -83,22 +83,26 @@ pullTimePeriods	<- function(socialData, migrationEventDate, timeWindow,group) {
 	return(list(preData,postData)
 }
 
-
-groupStrings	<- data.frame()
-
-for (i in uniqueDays){
-	groupsObserved	<- unique(groups[groups$date == i, "group"])
-	for (j in groupsObserved){
-		animals	<- groups[groups$date == i & groups$group == j,"animal"]
-		animalsCat	<- paste(animals,collapse = "")
-		newLine	<- cbind.data.frame(i,j,animalsCat)
-		groupStrings	<- rbind.data.frame(groupStrings,newLine)
+groupSummary	<- function(groupsFile){
+	groupStrings	<- data.frame()
+	uniqueDays		<- unique(groupsFile$date)
+	for (i in uniqueDays){
+		#print(i)
+		groupsObserved	<- unique(groupsFile[groupsFile$date == i, "group"])
+		for (j in groupsObserved){
+			#print(j)
+			animals	<- groupsFile[groupsFile$date == i & groupsFile$group == j,"animal"]
+			animalsCat	<- paste(animals,collapse = "")
+			newLine	<- cbind.data.frame(i,j,animalsCat)
+			groupStrings	<- rbind.data.frame(groupStrings,newLine)
+			#print(dim(groupStrings))
+		}
 	}
+	#print(head(groupStrings))
+	groupStrings$i	<- as.Date(groupStrings$i, format = "%m/%d/%Y")
+	groupStrings	<- groupStrings[order(groupStrings$j,groupStrings$i),]
+	return(groupStrings)
 }
-
-
-groupStrings	<- groupStrings[order(groupStrings$j,groupStrings$i),]
-groupStrings$i	<- as.Date(groupStrings$i)
 groupChangesSummary	<- data.frame()
 
 groupStringsXII	<- groupStrings[groupStrings$j == "XII",]
