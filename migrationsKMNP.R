@@ -39,6 +39,18 @@ socialDataAllRaw$Receiver	<- gsub('Savannah_baby_2011', 'Savannahbaby2011', soci
 socialData		<- socialDataAllRaw[socialDataAllRaw$Initiator %in% sifakaNames & socialDataAllRaw$Receiver %in% sifakaNames,]
 socialDataRemoved	<- socialDataAllRaw[!(socialDataAllRaw$Initiator %in% sifakaNames & socialDataAllRaw$Receiver %in% sifakaNames),]
 
+#Fixing errors in groupsFile
+groups$animal	<- gsub('Kelikely ', 'Kelikely', groups$animal)
+groups$sex		<- gsub('unknown', 'Unknown', groups$sex)
+groups$age 		<- gsub('subadult', 'Subadult', groups$age)
+groups$origin	<- gsub('Not Natal', 'Not natal', groups$origin)
+
+#Fixes duplicates, but need to make sure that the comments stay if needed for Becca
+groups		<-groups[!duplicated(groups[,c("date","animal")]),]
+groupsLinesRemoved	<-groups[duplicated(groups[,c("date","animal")]),]
+write.csv(groups,"groupsEditedML2021-Oct-27.csv",row.names = FALSE)
+write.csv(groupsLinesRemoved,"groupsLinesRemovedML2021-Oct-27.csv",row.names = FALSE)
+
 ######################################################
 ### Combine Focal Lists and Create Observation MAT ###
 ######################################################
@@ -103,7 +115,7 @@ groupSummary	<- function(groupsFile){
 	groupStrings	<- groupStrings[order(groupStrings$j,groupStrings$i),]
 	return(groupStrings)
 }
-groupChangesSummary	<- data.frame()
+groupStrings		<-groupSummary(groups)
 
 groupStringsXII	<- groupStrings[groupStrings$j == "XII",]
 groupStringsI	<- groupStrings[groupStrings$j == "I",]
@@ -114,23 +126,29 @@ groupStringsV	<- groupStrings[groupStrings$j == "V",]
 groupStringsVI	<- groupStrings[groupStrings$j == "VI",]
 groupStringsXI	<- groupStrings[groupStrings$j == "XI",]
 
-for (j in unique(groupStringsXI$j)){
-	groupSubset	<- groupStringsXI[groupStringsXI$j == j,]
-	if (dim(groupSubset)[1] == 1){
-		next
-	}
-	for (k in 2:dim(groupSubset)[1]){
-		groupStringK	<- groupStringsXI[k-1,3]	
-		groupStringK_1	<- groupStringsXI[k,3]
-		dateK			<- groupStringsXI[k-1,1]
-		dateK_1		<- groupStringsXI[k,1]
-		if (groupStringK != groupStringK_1){
-			groupChangeLine	<- cbind.data.frame(j,dateK,dateK_1,groupStringK,groupStringK_1)
-			groupChangesSummary	<- rbind.data.frame(groupChangesSummary,groupChangeLine)	
-		} 	
-	}
-	
+identifyGroupChanges	<- function(groupStrings,groupID){
+		groupChangesSummary	<- data.frame()
+		groupSubset	<- groupStrings[groupStrings$j == groupID,]
+		#print(table(groupSubset$j))
+		if (dim(groupSubset)[1] == 1){
+			next
+		}
+		for (k in 2:dim(groupSubset)[1]){
+			groupStringK	<- groupSubset[k-1,3]	
+			groupStringK_1	<- groupSubset[k,3]
+			dateK			<- groupSubset[k-1,1]
+			dateK_1		<- groupSubset[k,1]
+			if (groupStringK != groupStringK_1){
+				groupChangeLine	<- cbind.data.frame(groupID,dateK,dateK_1,groupStringK,groupStringK_1)
+				groupChangesSummary	<- rbind.data.frame(groupChangesSummary,groupChangeLine)	
+			} 	
+		}
+	return(groupChangesSummary)
 }
 
-write.csv(groupChangesSummary, "groupChangesSummaryXI.csv", row.names=FALSE)
+groupsOfInterest		<- c("I","II","III","IV","V","VI","XI","XII")
+groupChangesAll		<- lapply(groupsOfInterest,identifyGroupChanges,groupStrings = groupStrings)
+groupChangesAllDataFrame	<- as.data.frame(do.call(rbind,groupChangesAll))
+
+write.csv(groupChangesAllDataFrame, "groupChangesSummary.csv", row.names=FALSE)
 
