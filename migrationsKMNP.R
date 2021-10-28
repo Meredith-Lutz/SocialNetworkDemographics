@@ -3,11 +3,12 @@
 #####    Last updated 10/15/21 by ML   #####
 ############################################
 setwd("C:/Users/cecil/OneDrive/Desktop/SDC Work")
+library(stringr)
 
 socialDataRaw		<- read.csv('All_nonSuppStudent_Social_Data_through_2019_2021_07_09_ML_BL edits for NSFanalysis_Francis duplicates deleted_Jul262021_MLEdits.csv', stringsAsFactors = FALSE)
 matingSeasonStudent 	<- read.csv('studentMatingSeason_BL updates Jul232021_MLEdits.csv', stringsAsFactors = FALSE)
 laura				<- read.csv('Master file of Laura focal activity data.csv', stringsAsFactors = FALSE)
-groups			<- read.csv('Compiled Group File with some data deleted for BL analysis_Oct 14 2021_corrected2.csv', stringsAsFactors = FALSE)
+groupsRaw			<- read.csv('Compiled Group File with some data deleted for BL analysis_Oct 14 2021_corrected2.csv', stringsAsFactors = FALSE)
 nnFocalList			<- read.csv('focal.ids.nn_tmm_25sep2021.csv', stringsAsFactors = FALSE)
 actvFocalList		<- read.csv('focal.ids.actv_tmm_25sep2021.csv', stringsAsFactors = FALSE)
 filemakerFocalList	<- read.csv('FileMakerIDs_ML_11Oct2021.csv', stringsAsFactors = FALSE)
@@ -46,10 +47,15 @@ groups$age 		<- gsub('subadult', 'Subadult', groups$age)
 groups$origin	<- gsub('Not Natal', 'Not natal', groups$origin)
 
 #Fixes duplicates, but need to make sure that the comments stay if needed for Becca
-groups		<-groups[!duplicated(groups[,c("date","animal")]),]
-groupsLinesRemoved	<-groups[duplicated(groups[,c("date","animal")]),]
-write.csv(groups,"groupsEditedML2021-Oct-27.csv",row.names = FALSE)
-write.csv(groupsLinesRemoved,"groupsLinesRemovedML2021-Oct-27.csv",row.names = FALSE)
+groups		<-groupsRaw[!duplicated(groupsRaw[,c("date","animal")]),]
+groupsLinesRemoved	<-groupsRaw[duplicated(groupsRaw[,c("date","animal")]),]
+#write.csv(groups,"groupsEditedML2021-Oct-27.csv",row.names = FALSE)
+#write.csv(groupsLinesRemoved,"groupsLinesRemovedML2021-Oct-27.csv",row.names = FALSE)
+
+#Merging groupNames back onto socialData
+socialData	<- merge(socialData,groups[,1:3], by.x = c("Date","Focal"),by.y = c("date","animal"), all.x = TRUE)
+
+
 
 ######################################################
 ### Combine Focal Lists and Create Observation MAT ###
@@ -86,15 +92,18 @@ for(i in uniqueDays) {
 ##############################################
 pullTimePeriods	<- function(socialData, migrationEventDate, timeWindow,group) {
 	migrationEventDate	<- as.Date(migrationEventDate)
-	socialData$date	<- as.Date(socialData$date)
-	socialDataSub	<- socialData[socialData$group == group,] 
+	socialData$Date	<- as.Date(socialData$Date)
+	socialDataSub	<- socialData[socialData$group == group,]
+	print(dim(socialDataSub)) 
 	startDate		<- migrationEventDate - timeWindow
+	print(startDate)
 	endDate		<- migrationEventDate + timeWindow
-	preData		<- socialDataSub[socialDataSub$date >= startDate & socialDataSub$date <= migrationEventDate, ]
-	postData		<- socialDataSub[socialDataSub$date >= migrationEventDate & socialDataSub$date <= postData,]
-	return(list(preData,postData)
+	print(endDate)
+	preData		<- socialDataSub[socialDataSub$Date >= startDate & socialDataSub$Date <= migrationEventDate, ]
+	postData		<- socialDataSub[socialDataSub$Date >= migrationEventDate & socialDataSub$Date <= endDate,]
+	return(list(preData,postData))
 }
-
+pullTimePeriods(socialData,"2019-02-01",10,"II")
 groupSummary	<- function(groupsFile){
 	groupStrings	<- data.frame()
 	uniqueDays		<- unique(groupsFile$date)
@@ -116,15 +125,6 @@ groupSummary	<- function(groupsFile){
 	return(groupStrings)
 }
 groupStrings		<-groupSummary(groups)
-
-groupStringsXII	<- groupStrings[groupStrings$j == "XII",]
-groupStringsI	<- groupStrings[groupStrings$j == "I",]
-groupStringsII	<- groupStrings[groupStrings$j == "II",]
-groupStringsIII	<- groupStrings[groupStrings$j == "III",]
-groupStringsIV	<- groupStrings[groupStrings$j == "IV",]
-groupStringsV	<- groupStrings[groupStrings$j == "V",]
-groupStringsVI	<- groupStrings[groupStrings$j == "VI",]
-groupStringsXI	<- groupStrings[groupStrings$j == "XI",]
 
 identifyGroupChanges	<- function(groupStrings,groupID){
 		groupChangesSummary	<- data.frame()
@@ -150,5 +150,8 @@ groupsOfInterest		<- c("I","II","III","IV","V","VI","XI","XII")
 groupChangesAll		<- lapply(groupsOfInterest,identifyGroupChanges,groupStrings = groupStrings)
 groupChangesAllDataFrame	<- as.data.frame(do.call(rbind,groupChangesAll))
 
-write.csv(groupChangesAllDataFrame, "groupChangesSummary.csv", row.names=FALSE)
+#write.csv(groupChangesAllDataFrame, "groupChangesSummary.csv", row.names=FALSE)
 
+calculatePrePostNets	<- function(socialData, migrationEventDate, timeWindow,group, focalList){
+	prePostSocialData	<- pullTimePeriods(socialData, migrationEventDate, timeWindow,group)
+}
