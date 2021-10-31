@@ -2,7 +2,7 @@
 ##### Demographic changes - migrations #####
 #####    Last updated 10/15/21 by ML   #####
 ############################################
-setwd("C:/Users/cecil/OneDrive/Desktop/SDC Work")
+#setwd("C:/Users/cecil/OneDrive/Desktop/SDC Work")
 library(stringr)
 
 socialDataRaw		<- read.csv('All_nonSuppStudent_Social_Data_through_2019_2021_07_09_ML_BL edits for NSFanalysis_Francis duplicates deleted_Jul262021_MLEdits.csv', stringsAsFactors = FALSE)
@@ -53,9 +53,7 @@ groupsLinesRemoved	<-groupsRaw[duplicated(groupsRaw[,c("date","animal")]),]
 #write.csv(groupsLinesRemoved,"groupsLinesRemovedML2021-Oct-27.csv",row.names = FALSE)
 
 #Merging groupNames back onto socialData
-socialData	<- merge(socialData,groups[,1:3], by.x = c("Date","Focal"),by.y = c("date","animal"), all.x = TRUE)
-
-
+socialData	<- merge(socialData,groups[,1:3], by.x = c("Date", "Focal"),by.y = c("date", "animal"), all.x = TRUE)
 
 ######################################################
 ### Combine Focal Lists and Create Observation MAT ###
@@ -63,6 +61,7 @@ socialData	<- merge(socialData,groups[,1:3], by.x = c("Date","Focal"),by.y = c("
 fullFocalList	<- rbind.data.frame(filemakerFocalList, nnFocalList, actvFocalList, stringsAsFactors = FALSE)
 fullFocalList	<- fullFocalList[order(fullFocalList$date, fullFocalList$start_time),]
 
+##Need to create this as a function that can be given to others
 uniqueDays		<- unique(groups$date)
 obsMat		<- 0*as.matrix(table(sifakaNames)%*%t(table(sifakaNames)))
 for(i in uniqueDays) {
@@ -94,64 +93,64 @@ pullTimePeriods	<- function(socialData, migrationEventDate, timeWindow,group) {
 	migrationEventDate	<- as.Date(migrationEventDate)
 	socialData$Date	<- as.Date(socialData$Date)
 	socialDataSub	<- socialData[socialData$group == group,]
-	print(dim(socialDataSub)) 
 	startDate		<- migrationEventDate - timeWindow
-	print(startDate)
 	endDate		<- migrationEventDate + timeWindow
-	print(endDate)
 	preData		<- socialDataSub[socialDataSub$Date >= startDate & socialDataSub$Date <= migrationEventDate, ]
 	postData		<- socialDataSub[socialDataSub$Date >= migrationEventDate & socialDataSub$Date <= endDate,]
 	return(list(preData,postData))
 }
-pullTimePeriods(socialData,"2019-02-01",10,"II")
+pullTimePeriods(socialData, "2019-02-01", 10, "II")
+
 groupSummary	<- function(groupsFile){
 	groupStrings	<- data.frame()
 	uniqueDays		<- unique(groupsFile$date)
 	for (i in uniqueDays){
-		#print(i)
 		groupsObserved	<- unique(groupsFile[groupsFile$date == i, "group"])
 		for (j in groupsObserved){
-			#print(j)
-			animals	<- groupsFile[groupsFile$date == i & groupsFile$group == j,"animal"]
-			animalsCat	<- paste(animals,collapse = "")
-			newLine	<- cbind.data.frame(i,j,animalsCat)
-			groupStrings	<- rbind.data.frame(groupStrings,newLine)
-			#print(dim(groupStrings))
+			animals		<- groupsFile[groupsFile$date == i & groupsFile$group == j, "animal"]
+			animalsCat		<- paste(animals, collapse = "")
+			newLine		<- cbind.data.frame(i, j, animalsCat)
+			groupStrings	<- rbind.data.frame(groupStrings, newLine)
 		}
 	}
-	#print(head(groupStrings))
 	groupStrings$i	<- as.Date(groupStrings$i, format = "%m/%d/%Y")
-	groupStrings	<- groupStrings[order(groupStrings$j,groupStrings$i),]
+	groupStrings	<- groupStrings[order(groupStrings$j, groupStrings$i), ]
 	return(groupStrings)
 }
 groupStrings		<-groupSummary(groups)
 
 identifyGroupChanges	<- function(groupStrings,groupID){
-		groupChangesSummary	<- data.frame()
-		groupSubset	<- groupStrings[groupStrings$j == groupID,]
-		#print(table(groupSubset$j))
-		if (dim(groupSubset)[1] == 1){
-			next
-		}
-		for (k in 2:dim(groupSubset)[1]){
-			groupStringK	<- groupSubset[k-1,3]	
-			groupStringK_1	<- groupSubset[k,3]
-			dateK			<- groupSubset[k-1,1]
-			dateK_1		<- groupSubset[k,1]
-			if (groupStringK != groupStringK_1){
-				groupChangeLine	<- cbind.data.frame(groupID,dateK,dateK_1,groupStringK,groupStringK_1)
-				groupChangesSummary	<- rbind.data.frame(groupChangesSummary,groupChangeLine)	
-			} 	
-		}
+	groupChangesSummary	<- data.frame()
+	groupSubset	<- groupStrings[groupStrings$j == groupID,]	
+	if (dim(groupSubset)[1] == 1){
+		next
+	}
+	for (k in 2:dim(groupSubset)[1]){
+		groupStringK	<- groupSubset[k-1, 3]	
+		groupStringK_1	<- groupSubset[k, 3]
+		dateK			<- groupSubset[k-1, 1]
+		dateK_1		<- groupSubset[k, 1]
+		if (groupStringK != groupStringK_1){
+			groupChangeLine		<- cbind.data.frame(groupID, dateK, dateK_1, groupStringK, groupStringK_1)
+			groupChangesSummary	<- rbind.data.frame(groupChangesSummary, groupChangeLine)	
+		} 	
+	}
 	return(groupChangesSummary)
 }
 
-groupsOfInterest		<- c("I","II","III","IV","V","VI","XI","XII")
-groupChangesAll		<- lapply(groupsOfInterest,identifyGroupChanges,groupStrings = groupStrings)
+calculatePrePostNets	<- function(socialData, migrationEventDate, timeWindow, group, focalList){
+	prePostSocialData	<- pullTimePeriods(socialData, migrationEventDate, timeWindow, group)
+	#Calculate obstime
+	#Calculate pre net
+	#Calculate post net
+	#Divide those
+}
+
+#################################
+### Generate migration events ###
+#################################
+groupsOfInterest			<- c("I", "II", "III", "IV", "V", "VI", "XI", "XII")
+groupChangesAll			<- lapply(groupsOfInterest, identifyGroupChanges, groupStrings = groupStrings)
 groupChangesAllDataFrame	<- as.data.frame(do.call(rbind,groupChangesAll))
 
 #write.csv(groupChangesAllDataFrame, "groupChangesSummary.csv", row.names=FALSE)
-
-calculatePrePostNets	<- function(socialData, migrationEventDate, timeWindow,group, focalList){
-	prePostSocialData	<- pullTimePeriods(socialData, migrationEventDate, timeWindow,group)
-}
