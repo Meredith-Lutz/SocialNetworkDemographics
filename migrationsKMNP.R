@@ -2,15 +2,15 @@
 ##### Demographic changes - migrations #####
 #####    Last updated 10/15/21 by ML   #####
 ############################################
-#setwd("C:/Users/cecil/OneDrive/Desktop/SDC Work")
+setwd("C:/Users/cecil/OneDrive/Desktop/SDC Work")
 library(stringr)
+library(lme4)
 
-socialDataRaw		<- read.csv('All_nonSuppStudent_Social_Data_through_2019_2021_07_09_ML_BL edits for NSFanalysis_Francis duplicates deleted_Jul262021_MLEdits.csv', stringsAsFactors = FALSE)
+socialDataRaw		<- read.csv('All_nonSuppStudent_Social_Data_through_2019_Francis duplicates deleted_Jul262021_ML_2021_11_10 (1).csv', stringsAsFactors = FALSE)
 matingSeasonStudent 	<- read.csv('studentMatingSeason_BL updates Jul232021_MLEdits.csv', stringsAsFactors = FALSE)
-laura				<- read.csv('Master file of Laura focal activity data.csv', stringsAsFactors = FALSE)
-groupsRaw			<- read.csv('Compiled Group File with some data deleted for BL analysis_Oct 14 2021_corrected2.csv', stringsAsFactors = FALSE)
-nnFocalList			<- read.csv('focal.ids.nn_tmm_25sep2021.csv', stringsAsFactors = FALSE)
-actvFocalList		<- read.csv('focal.ids.actv_tmm_25sep2021.csv', stringsAsFactors = FALSE)
+groups			<- read.csv('Compiled Group File with some data deleted for BL analysis_Nov 3 2021_ML Corrected11Nov2021.csv', stringsAsFactors = FALSE)
+nnFocalList			<- read.csv('NearestNeighborIDs_TMM_ML_10Nov2021.csv', stringsAsFactors = FALSE)
+actvFocalList		<- read.csv('FocalActivityIDs_TMM_ML_11Nov2021.csv', stringsAsFactors = FALSE)
 filemakerFocalList	<- read.csv('FileMakerIDs_ML_11Oct2021.csv', stringsAsFactors = FALSE)
 
 demo				<- read.csv('Copy of life.history.TMM with becca comments about conflicting info Feb10_2021_ML.csv', stringsAsFactors = FALSE)
@@ -41,14 +41,14 @@ socialData		<- socialDataAllRaw[socialDataAllRaw$Initiator %in% sifakaNames & so
 socialDataRemoved	<- socialDataAllRaw[!(socialDataAllRaw$Initiator %in% sifakaNames & socialDataAllRaw$Receiver %in% sifakaNames),]
 
 #Fixing errors in groupsFile
-groups$animal	<- gsub('Kelikely ', 'Kelikely', groups$animal)
-groups$sex		<- gsub('unknown', 'Unknown', groups$sex)
-groups$age 		<- gsub('subadult', 'Subadult', groups$age)
-groups$origin	<- gsub('Not Natal', 'Not natal', groups$origin)
+#groups$animal	<- gsub('Kelikely ', 'Kelikely', groups$animal)
+#groups$sex		<- gsub('unknown', 'Unknown', groups$sex)
+#groups$age 		<- gsub('subadult', 'Subadult', groups$age)
+#groups$origin	<- gsub('Not Natal', 'Not natal', groups$origin)
 
 #Fixes duplicates, but need to make sure that the comments stay if needed for Becca
-groups		<-groupsRaw[!duplicated(groupsRaw[,c("date","animal")]),]
-groupsLinesRemoved	<-groupsRaw[duplicated(groupsRaw[,c("date","animal")]),]
+#groups		<-groupsRaw[!duplicated(groupsRaw[,c("date","animal")]),]
+#groupsLinesRemoved	<-groupsRaw[duplicated(groupsRaw[,c("date","animal")]),]
 #write.csv(groups,"groupsEditedML2021-Oct-27.csv",row.names = FALSE)
 #write.csv(groupsLinesRemoved,"groupsLinesRemovedML2021-Oct-27.csv",row.names = FALSE)
 
@@ -60,6 +60,14 @@ socialData	<- merge(socialData,groups[,1:3], by.x = c("Date", "Focal"),by.y = c(
 ######################################################
 fullFocalList	<- rbind.data.frame(filemakerFocalList, nnFocalList, actvFocalList, stringsAsFactors = FALSE)
 fullFocalList	<- fullFocalList[order(fullFocalList$date, fullFocalList$start_time),]
+fullFocalList$yearMonth	<- substr(fullFocalList$date,1,7)
+scansPerMonthPerGroup	<- aggregate(fullFocalList$number_scans,by = list(month=fullFocalList$yearMonth, group = fullFocalList$group),FUN = sum)
+
+scansPerMonthPerGroup	<- scansPerMonthPerGroup[order(scansPerMonthPerGroup$month),]
+scansPerMonthPerGroupNoSolitary	<- scansPerMonthPerGroup[scansPerMonthPerGroup$group%in%c("I","II","III","IV","V","VI","XI","XII"),]
+plot.default(as.factor(scansPerMonthPerGroupNoSolitary$month), scansPerMonthPerGroupNoSolitary$x/6, col = as.factor(scansPerMonthPerGroupNoSolitary$group), pch = 16, ylab = "Hours of Observation")
+legend("topleft", legend = c("I","II","III","IV","V","VI","XI","XII"),col = 1:8, pch = 16)
+
 
 ##Need to create this as a function that can be given to others
 uniqueDays		<- unique(groups$date)
@@ -105,15 +113,17 @@ groupSummary	<- function(groupsFile){
 	groupStrings	<- data.frame()
 	uniqueDays		<- unique(groupsFile$date)
 	for (i in uniqueDays){
+		print(i)
 		groupsObserved	<- unique(groupsFile[groupsFile$date == i, "group"])
 		for (j in groupsObserved){
 			animals		<- groupsFile[groupsFile$date == i & groupsFile$group == j, "animal"]
 			animalsCat		<- paste(animals, collapse = "")
 			newLine		<- cbind.data.frame(i, j, animalsCat)
+			print(newLine)
 			groupStrings	<- rbind.data.frame(groupStrings, newLine)
 		}
 	}
-	groupStrings$i	<- as.Date(groupStrings$i, format = "%m/%d/%Y")
+	#groupStrings$i	<- as.Date(groupStrings$i, format = "%m/%d/%Y")
 	groupStrings	<- groupStrings[order(groupStrings$j, groupStrings$i), ]
 	return(groupStrings)
 }
@@ -146,6 +156,28 @@ calculatePrePostNets	<- function(socialData, migrationEventDate, timeWindow, gro
 	#Divide those
 }
 
+####################################
+### General Network Demographics ###
+####################################
+#How long is grooming?
+socialData	<- merge(socialData,demo[,c(1,3,5:6)],by.x="Initiator",by.y="Name",all.x=TRUE)
+colnames(socialData)[22:24]	<- c("Initiator.sex", "Initiator.Birth.Year","Initiator.Birth.Notes")
+socialData	<- merge(socialData,demo[,c(1,3,5:6)],by.x="Receiver",by.y="Name",all.x=TRUE)
+colnames(socialData)[25:27]	<- c("Receiver.sex", "Receiver.Birth.Year","Receiver.Birth.Notes")
+
+socialData$dyadID	<- ifelse(socialData$Initiator < socialData$Receiver,
+				paste(socialData$Initiator,socialData$Receiver,sep=""),
+				paste(socialData$Receiver,socialData$Initiator,sep=""))
+
+socialData$sexConcordance	<- ifelse(socialData$Initiator.sex < socialData$Receiver.sex,
+				paste(socialData$Initiator.sex,socialData$Receiver.sex,sep=""),
+				paste(socialData$Receiver.sex,socialData$Initiator.sex,sep=""))
+
+groom		<- socialData[socialData$Behavior == "Groom" | socialData$Behavior == "Mutual_groom",]
+
+#Malemale and malefemale grooming bouts are shorter than female female
+model1	<- glmer(Duration.Seconds ~ sexConcordance + (1|dyadID), data = groom, family = "poisson")
+
 #################################
 ### Generate migration events ###
 #################################
@@ -153,4 +185,4 @@ groupsOfInterest			<- c("I", "II", "III", "IV", "V", "VI", "XI", "XII")
 groupChangesAll			<- lapply(groupsOfInterest, identifyGroupChanges, groupStrings = groupStrings)
 groupChangesAllDataFrame	<- as.data.frame(do.call(rbind,groupChangesAll))
 
-#write.csv(groupChangesAllDataFrame, "groupChangesSummary.csv", row.names=FALSE)
+write.csv(groupChangesAllDataFrame, "groupChangesSummary.csv", row.names=FALSE)
