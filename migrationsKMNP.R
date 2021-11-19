@@ -6,6 +6,9 @@ setwd("C:/Users/cecil/OneDrive/Desktop/SDC Work")
 library(stringr)
 library(lme4)
 
+source("C:/Users/cecil/OneDrive/Desktop/SDC Work/Github Work/NSFSocialNetwork2/NSFSocialNetwork/ObservationTimeFunctions.R")
+source("C:/Users/cecil/OneDrive/Desktop/SDC Work/Github Work/SeasonalNetworkAnalyses/createNetworkFunction.R")
+
 socialDataRaw		<- read.csv('All_nonSuppStudent_Social_Data_through_2019_Francis duplicates deleted_Jul262021_ML_2021_11_10 (1).csv', stringsAsFactors = FALSE)
 matingSeasonStudent 	<- read.csv('studentMatingSeason_BL updates Jul232021_MLEdits.csv', stringsAsFactors = FALSE)
 groups			<- read.csv('Compiled Group File with some data deleted for BL analysis_Nov 3 2021_ML Corrected11Nov2021.csv', stringsAsFactors = FALSE)
@@ -70,29 +73,6 @@ legend("topleft", legend = c("I","II","III","IV","V","VI","XI","XII"),col = 1:8,
 
 
 ##Need to create this as a function that can be given to others
-uniqueDays		<- unique(groups$date)
-obsMat		<- 0*as.matrix(table(sifakaNames)%*%t(table(sifakaNames)))
-for(i in uniqueDays) {
-	print(paste("Starting Day", i))
-	groupsObserved	<- unique(groups[groups$date == i, "group"])
-	print(groupsObserved)
-      for(j in groupsObserved) {
-		subsetFocalList	<- fullFocalList[fullFocalList$date ==  i & fullFocalList$group == j,]
-		print(paste(j, "Has", dim(subsetFocalList)[1], "Focals on", i))
-		if(dim(subsetFocalList)[1] == 0){
-			next
-		}
-		animalsPresent	<- groups[groups$date == i & groups$group == j, "animal"]
-		for(k in animalsPresent){
- 			for(m in animalsPresent){
-				focals	<- subsetFocalList[subsetFocalList$focal_animal == k | subsetFocalList$focal_animal == m, ]
-				obsTime	<- 10*sum(focals$number_scans,na.rm = TRUE)
-				obsMat[rownames(obsMat) == k,colnames(obsMat) == m]	<- obsTime + obsMat[rownames(obsMat) == k,colnames(obsMat) == m]
-				obsMat[rownames(obsMat) == m,colnames(obsMat) == k]	<- obsTime + obsMat[rownames(obsMat) == m,colnames(obsMat) == k]
-			}
-		}
-	}
-}
 
 ##############################################
 ### Write Functions for Migration Analysis ###
@@ -148,13 +128,30 @@ identifyGroupChanges	<- function(groupStrings,groupID){
 	return(groupChangesSummary)
 }
 
-calculatePrePostNets	<- function(socialData, migrationEventDate, timeWindow, group, focalList){
+calculatePrePostNets	<- function(socialData, migrationEventDate, timeWindow, group, focalList, groupsFile, behavior, directional = TRUE){
+	migrationEventDate	<- as.Date(migrationEventDate) 
+	startDate			<- migrationEventDate - timeWindow
+	stopDate			<- migrationEventDate + timeWindow
+	
+	groupsSubset	<- groupsFile[groupsFile$date >= startDate & groupsFile$date <= stopDate & groupsFile$group == group,]
+	animals		<- sort(unique(groupsSubset$animal))
+	
 	prePostSocialData	<- pullTimePeriods(socialData, migrationEventDate, timeWindow, group)
-	#Calculate obstime
-	#Calculate pre net
-	#Calculate post net
-	#Divide those
+	
+	obsMatPre		<- calculateObservationMatrix(focalList = focalList,groupsFile = groupsSubset, startDate = startDate, endDate = migrationEventDate, animals = animals)
+	obsMatPost		<- calculateObservationMatrix(focalList = focalList,groupsFile = groupsSubset, startDate = migrationEventDate, endDate = stopDate, animals = animals)
+
+	preMat		<- createNet(prePostSocialData[[1]]$Initiator, prePostSocialData[[1]]$Receiver, prePostSocialData[[1]]$Behavior, behavior, subjects = animals, directional = directional, type = "duration", durs = prePostSocialData[[1]]$Duration.Seconds)
+	postMat		<- createNet(prePostSocialData[[2]]$Initiator, prePostSocialData[[2]]$Receiver, prePostSocialData[[2]]$Behavior, behavior, subjects = animals, directional = directional, type = "duration", durs = prePostSocialData[[2]]$Duration.Seconds)
+	preMatAdj		<- preMat/obsMatPre
+	postMatAdj		<- postMat/obsMatPost
+	
+	return(list(preMat = preMatAdj, postMat = postMatAdj))
 }
+
+#pullTimePeriods(socialData, "2019-02-01", 10, "II")
+calculatePrePostNets(socialData, "2019-02-01", 10, "II", focalList = fullFocalList, groupsFile = groups, behavior = "Groom", directional = TRUE) 
+#Error in if (durs[1] != FALSE) { : missing value where TRUE/FALSE needed
 
 ####################################
 ### General Network Demographics ###
