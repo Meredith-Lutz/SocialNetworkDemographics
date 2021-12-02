@@ -2,7 +2,6 @@
 ##### Long term network demographics - KMNP #####
 #####      Last updated by ML 12/1/2021     #####
 #################################################
-
 setwd("C:/Users/cecil/OneDrive/Desktop/SDC Work")
 library(stringr)
 library(lme4)
@@ -12,8 +11,8 @@ source("C:/Users/cecil/OneDrive/Desktop/SDC Work/Github Work/SeasonalNetworkAnal
 
 socialDataRaw		<- read.csv('All_nonSuppStudent_Social_Data_through_2019_Francis duplicates deleted_Jul262021_ML_2021_11_10 (1).csv', stringsAsFactors = FALSE)
 groups			<- read.csv('Compiled Group File with some data deleted for BL analysis_Nov 3 2021_ML Corrected11Nov2021.csv', stringsAsFactors = FALSE)
-nnFocalList			<- read.csv('NearestNeighborIDs_TMM_ML_10Nov2021.csv', stringsAsFactors = FALSE)
-actvFocalList		<- read.csv('FocalActivityIDs_TMM_ML_11Nov2021.csv', stringsAsFactors = FALSE)
+nnFocalList			<- read.csv('NearestNeighborIDs_TMM_ML_01Dec2021.csv', stringsAsFactors = FALSE)
+actvFocalList		<- read.csv('FocalActivityIDs_TMM_ML_01Dec2021.csv', stringsAsFactors = FALSE)
 filemakerFocalList	<- read.csv('FileMakerIDs_ML_11Oct2021.csv', stringsAsFactors = FALSE)
 
 demo				<- read.csv('Copy of life.history.TMM with becca comments about conflicting info Feb10_2021_ML.csv', stringsAsFactors = FALSE)
@@ -21,7 +20,7 @@ demo$Name			<- str_to_title(demo$Name, locale = "en")
 demo$Sex			<- ifelse(demo$Sex == '', 'unknown', as.character(demo$Sex))
 sifakaNames			<- demo$Name
 
-socialDataAllRaw		<- socialDataRaw[,c('OriginalFile', 'Observer', 'Obs.ID', 'Date', 'Focal', 'Start', 'Stop',
+socialDataAllRaw		<- socialDataRaw[,c('OriginalFile', 'Observer', 'Obs.ID', 'Date', 'Month', 'Year', 'Focal', 'Start', 'Stop',
 					'Duration', 'Duration.Seconds', 'Initiator', 'Receiver', 'Context', 'Behavior', 'Species',
 					'Tree.number', 'Response', 'To', 'Win', 'Comments', 'Cleaning.Comments', 'StudentOb.YN')]
 
@@ -58,6 +57,30 @@ fullFocalList	<- rbind.data.frame(filemakerFocalList, nnFocalList, actvFocalList
 fullFocalList	<- fullFocalList[order(fullFocalList$date, fullFocalList$start_time),]
 fullFocalList$yearMonth	<- substr(fullFocalList$date,1,7)
 
+##################################################
+### Add Focal ID from Focal List to Social Data###
+##################################################
+socialData$focalID	<- NA
+for (i in 1:dim(fullFocalList)[1]){  
+	print(i)
+	focalObserver	<- fullFocalList[i,"observer"]
+	focalGroup	<- fullFocalList[i,"group"]
+	focalAnimal	<- fullFocalList[i,"focal_animal"]
+	focalDate	<- fullFocalList[i,"date"]
+	focalStartTime	<- fullFocalList[i,"start_time"]
+	focalStopTime	<- fullFocalList[i,"stop_time"]
+	socialData[socialData$Observer == focalObserver&socialData$group == focalGroup & 
+			socialData$Focal == focalAnimal & socialData$Date == focalDate & 
+			socialData$Start >= focalStartTime & 
+			socialData$Stop <= focalStopTime, "focalID"]	<- fullFocalList[i,"focalid"]
+
+}
+write.csv(socialData,"socialDataWithFocalIds.csv")
+
+> write.csv(socialData,"socialDataWithFocalIds.csv")
+
+#stopped at 6646 iteration for i
+#Error in `[<-.data.frame`(`*tmp*`, socialData$Observer == focalObserver &  : missing values are not allowed in subscripted assignments of data frames
 ##################################################
 ### Old code for matching scans and continuous ###
 ##################################################
