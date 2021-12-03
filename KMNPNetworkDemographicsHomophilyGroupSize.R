@@ -61,23 +61,39 @@ fullFocalList$yearMonth	<- substr(fullFocalList$date,1,7)
 ### Add Focal ID from Focal List to Social Data###
 ##################################################
 socialData$focalID	<- NA
-for (i in 1:dim(fullFocalList)[1]){  
+focalIdsDidNotWork	<- c()
+for (i in 6645:6650){  #1:dim(fullFocalList)[1]
 	print(i)
 	focalObserver	<- fullFocalList[i,"observer"]
+	print(focalObserver)
 	focalGroup	<- fullFocalList[i,"group"]
+	print(focalGroup)
 	focalAnimal	<- fullFocalList[i,"focal_animal"]
+	print(focalAnimal)
 	focalDate	<- fullFocalList[i,"date"]
+	print(focalDate)
 	focalStartTime	<- fullFocalList[i,"start_time"]
+	print(focalStartTime)
 	focalStopTime	<- fullFocalList[i,"stop_time"]
+	print(focalStopTime)
+	print(fullFocalList[i,"focalid"])
+	
+	nSocialLines	<- dim(socialData[socialData$Observer == focalObserver&socialData$group == focalGroup & 
+			socialData$Focal == focalAnimal & socialData$Date == focalDate & 
+			socialData$Start >= focalStartTime & socialData$Stop <= focalStopTime,])[1]
+	print(nSocialLines)
+	if (nSocialLines == 0){
+		print("Entered if")
+		focalIdsDidNotWork	<- c(focalIdsDidNotWork, i) 
+		print(focalIdsDidNotWork)
+		next
+	}
+
 	socialData[socialData$Observer == focalObserver&socialData$group == focalGroup & 
 			socialData$Focal == focalAnimal & socialData$Date == focalDate & 
-			socialData$Start >= focalStartTime & 
-			socialData$Stop <= focalStopTime, "focalID"]	<- fullFocalList[i,"focalid"]
-
+			socialData$Start >= focalStartTime & socialData$Stop <= focalStopTime, "focalID"]	<- fullFocalList[i,"focalid"]  
 }
-write.csv(socialData,"socialDataWithFocalIds.csv")
-
-> write.csv(socialData,"socialDataWithFocalIds.csv")
+#write.csv(socialData,"socialDataWithFocalIds.csv")
 
 #stopped at 6646 iteration for i
 #Error in `[<-.data.frame`(`*tmp*`, socialData$Observer == focalObserver &  : missing values are not allowed in subscripted assignments of data frames
