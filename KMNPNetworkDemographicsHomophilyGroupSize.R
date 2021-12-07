@@ -2,18 +2,22 @@
 ##### Long term network demographics - KMNP #####
 #####      Last updated by ML 12/1/2021     #####
 #################################################
-setwd("C:/Users/cecil/OneDrive/Desktop/SDC Work")
+#setwd("C:/Users/cecil/OneDrive/Desktop/SDC Work")
+setwd('G:/My Drive/Graduate School/Research/Projects/KMNPLongTermData/NSF Analyses')
+
 library(stringr)
 library(lme4)
 
-source("C:/Users/cecil/OneDrive/Desktop/SDC Work/Github Work/NSFSocialNetwork2/NSFSocialNetwork/ObservationTimeFunctions.R")
-source("C:/Users/cecil/OneDrive/Desktop/SDC Work/Github Work/SeasonalNetworkAnalyses/createNetworkFunction.R")
+#source("C:/Users/cecil/OneDrive/Desktop/SDC Work/Github Work/NSFSocialNetwork2/NSFSocialNetwork/ObservationTimeFunctions.R")
+source('G:/My Drive/Graduate School/Research/Projects/KMNPLongTermData/NSF Analyses/NSFSocialNetwork/ObservationTimeFunctions.R')
+#source("C:/Users/cecil/OneDrive/Desktop/SDC Work/Github Work/SeasonalNetworkAnalyses/createNetworkFunction.R")
+source('G:/My Drive/Graduate School/Research/Projects/TemporalNets/SeasonalNetworkAnalyses/createNetworkFunction.R')
 
-socialDataRaw		<- read.csv('All_nonSuppStudent_Social_Data_through_2019_Francis duplicates deleted_Jul262021_ML_2021_11_10 (1).csv', stringsAsFactors = FALSE)
+socialDataRaw		<- read.csv('All_nonSuppStudent_Social_Data_through_2019_Francis duplicates deleted_Jul262021_ML_2021_11_10.csv', stringsAsFactors = FALSE)
 groups			<- read.csv('Compiled Group File with some data deleted for BL analysis_Nov 3 2021_ML Corrected11Nov2021.csv', stringsAsFactors = FALSE)
 nnFocalList			<- read.csv('NearestNeighborIDs_TMM_ML_01Dec2021.csv', stringsAsFactors = FALSE)
 actvFocalList		<- read.csv('FocalActivityIDs_TMM_ML_01Dec2021.csv', stringsAsFactors = FALSE)
-filemakerFocalList	<- read.csv('FileMakerIDs_ML_11Oct2021.csv', stringsAsFactors = FALSE)
+filemakerFocalList	<- read.csv('FileMakerIDs_ML_06Dec2021.csv', stringsAsFactors = FALSE)
 
 demo				<- read.csv('Copy of life.history.TMM with becca comments about conflicting info Feb10_2021_ML.csv', stringsAsFactors = FALSE)
 demo$Name			<- str_to_title(demo$Name, locale = "en")
@@ -61,42 +65,27 @@ fullFocalList$yearMonth	<- substr(fullFocalList$date,1,7)
 ### Add Focal ID from Focal List to Social Data###
 ##################################################
 socialData$focalID	<- NA
-focalIdsDidNotWork	<- c()
-for (i in 6645:6650){  #1:dim(fullFocalList)[1]
+for (i in 1:dim(fullFocalList)[1]){ 
 	print(i)
 	focalObserver	<- fullFocalList[i,"observer"]
-	print(focalObserver)
-	focalGroup	<- fullFocalList[i,"group"]
-	print(focalGroup)
+	#print(focalObserver)
 	focalAnimal	<- fullFocalList[i,"focal_animal"]
-	print(focalAnimal)
+	#print(focalAnimal)
 	focalDate	<- fullFocalList[i,"date"]
-	print(focalDate)
+	#print(focalDate)
 	focalStartTime	<- fullFocalList[i,"start_time"]
-	print(focalStartTime)
+	#print(focalStartTime)
 	focalStopTime	<- fullFocalList[i,"stop_time"]
-	print(focalStopTime)
-	print(fullFocalList[i,"focalid"])
+	#print(focalStopTime)
+	#print(fullFocalList[i,"focalid"])
 	
-	nSocialLines	<- dim(socialData[socialData$Observer == focalObserver&socialData$group == focalGroup & 
+	socialData[socialData$Observer == focalObserver &
 			socialData$Focal == focalAnimal & socialData$Date == focalDate & 
-			socialData$Start >= focalStartTime & socialData$Stop <= focalStopTime,])[1]
-	print(nSocialLines)
-	if (nSocialLines == 0){
-		print("Entered if")
-		focalIdsDidNotWork	<- c(focalIdsDidNotWork, i) 
-		print(focalIdsDidNotWork)
-		next
-	}
-
-	socialData[socialData$Observer == focalObserver&socialData$group == focalGroup & 
-			socialData$Focal == focalAnimal & socialData$Date == focalDate & 
-			socialData$Start >= focalStartTime & socialData$Stop <= focalStopTime, "focalID"]	<- fullFocalList[i,"focalid"]  
+			socialData$Start >= focalStartTime & socialData$Start <= focalStopTime, "focalID"]	<- fullFocalList[i,"focalid"]  
 }
-#write.csv(socialData,"socialDataWithFocalIds.csv")
 
-#stopped at 6646 iteration for i
-#Error in `[<-.data.frame`(`*tmp*`, socialData$Observer == focalObserver &  : missing values are not allowed in subscripted assignments of data frames
+write.csv(socialData,"socialDataWithFocalIds.csv")
+
 ##################################################
 ### Old code for matching scans and continuous ###
 ##################################################
