@@ -2,16 +2,16 @@
 ##### Long term network demographics - KMNP #####
 #####      Last updated by ML 12/1/2021     #####
 #################################################
-#setwd("C:/Users/cecil/OneDrive/Desktop/SDC Work")
-setwd('G:/My Drive/Graduate School/Research/Projects/KMNPLongTermData/NSF Analyses')
+setwd("C:/Users/cecil/OneDrive/Desktop/SDC Work")
+#setwd('G:/My Drive/Graduate School/Research/Projects/KMNPLongTermData/NSF Analyses')
 
 library(stringr)
 library(lme4)
 
-#source("C:/Users/cecil/OneDrive/Desktop/SDC Work/Github Work/NSFSocialNetwork2/NSFSocialNetwork/ObservationTimeFunctions.R")
-source('G:/My Drive/Graduate School/Research/Projects/KMNPLongTermData/NSF Analyses/NSFSocialNetwork/ObservationTimeFunctions.R')
-#source("C:/Users/cecil/OneDrive/Desktop/SDC Work/Github Work/SeasonalNetworkAnalyses/createNetworkFunction.R")
-source('G:/My Drive/Graduate School/Research/Projects/TemporalNets/SeasonalNetworkAnalyses/createNetworkFunction.R')
+source("C:/Users/cecil/OneDrive/Desktop/SDC Work/Github Work/NSFSocialNetwork2/NSFSocialNetwork/ObservationTimeFunctions.R")
+#source('G:/My Drive/Graduate School/Research/Projects/KMNPLongTermData/NSF Analyses/NSFSocialNetwork/ObservationTimeFunctions.R')
+source("C:/Users/cecil/OneDrive/Desktop/SDC Work/Github Work/SeasonalNetworkAnalyses/createNetworkFunction.R")
+#source('G:/My Drive/Graduate School/Research/Projects/TemporalNets/SeasonalNetworkAnalyses/createNetworkFunction.R')
 
 socialDataRaw		<- read.csv('All_nonSuppStudent_Social_Data_through_2019_Francis duplicates deleted_Jul262021_ML_2021_11_10.csv', stringsAsFactors = FALSE)
 groups			<- read.csv('Compiled Group File with some data deleted for BL analysis_Nov 3 2021_ML Corrected11Nov2021.csv', stringsAsFactors = FALSE)
@@ -61,10 +61,14 @@ fullFocalList	<- rbind.data.frame(filemakerFocalList, nnFocalList, actvFocalList
 fullFocalList	<- fullFocalList[order(fullFocalList$date, fullFocalList$start_time),]
 fullFocalList$yearMonth	<- substr(fullFocalList$date,1,7)
 
+#Pick focals so that they aren't overlapping
+
 ##################################################
 ### Add Focal ID from Focal List to Social Data###
 ##################################################
-socialData$focalID	<- NA
+socialData$focalID		<- NA
+fullFocalList$adjStopTime	<- NA
+
 for (i in 1:dim(fullFocalList)[1]){ 
 	print(i)
 	focalObserver	<- fullFocalList[i,"observer"]
@@ -77,14 +81,29 @@ for (i in 1:dim(fullFocalList)[1]){
 	#print(focalStartTime)
 	focalStopTime	<- fullFocalList[i,"stop_time"]
 	#print(focalStopTime)
-	#print(fullFocalList[i,"focalid"])
+	focalid		<- fullFocalList[i,"focalid"]
 	
 	socialData[socialData$Observer == focalObserver &
+			socialData$Focal == focalAnimal & socialData$Date == focalDate & is.na(socialData$Start) == FALSE &
+			socialData$Start >= focalStartTime & socialData$Start <= focalStopTime, "focalID"]	<- focalid 
+
+	nLines	<- dim(socialData[socialData$focalID == focalid & is.na(socialData$focalid) == FALSE,])[1]
+	
+	if(nLines > 0){
+		#Calculate actual stop time of focal
+		maxBehaviorStopTime	<- max(socialData[socialData$focalID == focalid & is.na(socialData$focalID) == FALSE, "Stop"], na.rm = TRUE)
+		actualFocalStopTime	<- ifelse(maxBehaviorStopTime > focalStopTime, maxBehaviorStopTime, focalStopTime)
+
+		fullFocalList[i,]$adjStopTime	<- actualFocalStopTime
+
+		#Add in the extra lines
+		socialData[socialData$Observer == focalObserver &
 			socialData$Focal == focalAnimal & socialData$Date == focalDate & 
-			socialData$Start >= focalStartTime & socialData$Start <= focalStopTime, "focalID"]	<- fullFocalList[i,"focalid"]  
+			socialData$Start >= focalStartTime & socialData$Start <= actualFocalStopTime, "focalID"]	<- fullFocalList[i,"focalid"]  
+	}
 }
 
-write.csv(socialData,"socialDataWithFocalIds.csv")
+#write.csv(socialData,"socialDataWithFocalIds.csv")
 
 ##################################################
 ### Old code for matching scans and continuous ###
