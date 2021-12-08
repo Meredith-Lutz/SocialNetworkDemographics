@@ -7,13 +7,14 @@ setwd("C:/Users/cecil/OneDrive/Desktop/SDC Work")
 
 library(stringr)
 library(lme4)
+library(lubridate)
 
 source("C:/Users/cecil/OneDrive/Desktop/SDC Work/Github Work/NSFSocialNetwork2/NSFSocialNetwork/ObservationTimeFunctions.R")
 #source('G:/My Drive/Graduate School/Research/Projects/KMNPLongTermData/NSF Analyses/NSFSocialNetwork/ObservationTimeFunctions.R')
 source("C:/Users/cecil/OneDrive/Desktop/SDC Work/Github Work/SeasonalNetworkAnalyses/createNetworkFunction.R")
 #source('G:/My Drive/Graduate School/Research/Projects/TemporalNets/SeasonalNetworkAnalyses/createNetworkFunction.R')
 
-socialDataRaw		<- read.csv('All_nonSuppStudent_Social_Data_through_2019_Francis duplicates deleted_Jul262021_ML_2021_11_10.csv', stringsAsFactors = FALSE)
+socialDataRaw		<- read.csv('All_nonSuppStudent_Social_Data_through_2019_Francis duplicates deleted_Jul262021_ML_2021_11_10 (1).csv', stringsAsFactors = FALSE)
 groups			<- read.csv('Compiled Group File with some data deleted for BL analysis_Nov 3 2021_ML Corrected11Nov2021.csv', stringsAsFactors = FALSE)
 nnFocalList			<- read.csv('NearestNeighborIDs_TMM_ML_01Dec2021.csv', stringsAsFactors = FALSE)
 actvFocalList		<- read.csv('FocalActivityIDs_TMM_ML_01Dec2021.csv', stringsAsFactors = FALSE)
@@ -62,6 +63,57 @@ fullFocalList	<- fullFocalList[order(fullFocalList$date, fullFocalList$start_tim
 fullFocalList$yearMonth	<- substr(fullFocalList$date,1,7)
 
 #Pick focals so that they aren't overlapping
+uniqueDates	<- unique(fullFocalList$date)
+fullFocalListNonOverlapping	<- data.frame()
+for (i in uniqueDates){
+	print(i)
+	groupsObserved	<- unique(fullFocalList[fullFocalList$date == i,"group"])
+	for (j in groupsObserved){
+		print(j)
+		subset	<- fullFocalList[fullFocalList$group == j & fullFocalList$date == i,]
+		subset$start_time 	<- as.POSIXlt(subset$start_time, format = "%H:%M:%S")
+		subset$stop_time 	<- as.POSIXlt(subset$stop_time, format = "%H:%M:%S")
+		subset	<- subset[order(subset$start_time),]
+		for (k in 1:(dim(subset)[1]-1)){
+			for (m in (k+1):(dim(subset)[1]-1)){
+				print(k)
+				print(m)
+				#print(dim(subset))
+				focal1	<- interval(start = subset[k,"start_time"],end = subset[k,"stop_time"])
+				focal2	<- interval(start = subset[m,"start_time"],end = subset[m,"stop_time"])
+				if (is.na(focal1)==FALSE & is.na(focal2)==FALSE){
+					if (int_overlaps(focal1,focal2)){
+						observers	<- unique(subset[c(k,m),"observer"])
+						overlappingFocals	<- subset[c(k,m),]
+						if (length(observers) > 1){
+							observer1		<- observers[1]
+							observerToKeep	<- ifelse(observer1 == "Becca","Becca",
+											ifelse(observer1 == "Meredith","Meredith",
+											ifelse(observer1 == "Max", "Max",
+											ifelse(observer1 == "Max and Becca","Max and Becca",
+											ifelse(observer1 == "Patrick","Patrick", 
+								          		ifelse(observer1 == "Andry","Andry", 
+											ifelse(observer1 == "Daniel","Daniel", 
+											ifelse(observer1 == "Dessy","Dessy", 
+											ifelse(observer1 == "Francis","Francis", 
+											ifelse(observer1 == "Laura","Laura", 
+											ifelse(observer1 == "Mampionona","Mampionona", 
+											ifelse(observer1 == "Elvis","Elvis", "Felana"
+											))))))))))))
+							idToRemove	<- overlappingFocals[overlappingFocals$observer != observerToKeep,"focalid"]
+							subset	<- subset[subset$focalid != idToRemove,]
+						}
+					}
+				}
+			}
+		}
+		print(dim(subset))
+		print(dim(fullFocalListNonOverlapping))
+		fullFocalListNonOverlapping	<- rbind.data.frame(fullFocalListNonOverlapping,subset)
+		print(dim(fullFocalListNonOverlapping))
+	}
+}
+
 
 ##################################################
 ### Add Focal ID from Focal List to Social Data###
