@@ -19,6 +19,10 @@ groups			<- read.csv('Compiled Group File with some data deleted for BL analysis
 nnFocalList			<- read.csv('NearestNeighborIDs_TMM_ML_01Dec2021.csv', stringsAsFactors = FALSE)
 actvFocalList		<- read.csv('FocalActivityIDs_TMM_ML_01Dec2021.csv', stringsAsFactors = FALSE)
 filemakerFocalList	<- read.csv('FileMakerIDs_ML_06Dec2021.csv', stringsAsFactors = FALSE)
+nn				<- read.csv('NearestNeighbor_TMM_ML_01Dec2021.csv', stringsAsFactors = FALSE)
+actv				<- read.csv('FocalActivity_TMM_ML_11Nov2021.csv', stringsAsFactors = FALSE)
+fm				<- read.csv('FileMaker_ML_01Dec2021.csv', stringsAsFactors = FALSE)
+
 
 demo				<- read.csv('Copy of life.history.TMM with becca comments about conflicting info Feb10_2021_ML.csv', stringsAsFactors = FALSE)
 demo$Name			<- str_to_title(demo$Name, locale = "en")
@@ -71,46 +75,49 @@ for (i in uniqueDates){
 	for (j in groupsObserved){
 		print(j)
 		subset	<- fullFocalList[fullFocalList$group == j & fullFocalList$date == i,]
+		#print(dim(subset))
 		subset$start_time 	<- as.POSIXlt(subset$start_time, format = "%H:%M:%S")
 		subset$stop_time 	<- as.POSIXlt(subset$stop_time, format = "%H:%M:%S")
 		subset	<- subset[order(subset$start_time),]
-		for (k in 1:(dim(subset)[1]-1)){
-			for (m in (k+1):(dim(subset)[1]-1)){
-				print(k)
-				print(m)
-				#print(dim(subset))
-				focal1	<- interval(start = subset[k,"start_time"],end = subset[k,"stop_time"])
-				focal2	<- interval(start = subset[m,"start_time"],end = subset[m,"stop_time"])
-				if (is.na(focal1)==FALSE & is.na(focal2)==FALSE){
-					if (int_overlaps(focal1,focal2)){
-						observers	<- unique(subset[c(k,m),"observer"])
-						overlappingFocals	<- subset[c(k,m),]
-						if (length(observers) > 1){
-							observer1		<- observers[1]
-							observerToKeep	<- ifelse(observer1 == "Becca","Becca",
-											ifelse(observer1 == "Meredith","Meredith",
-											ifelse(observer1 == "Max", "Max",
-											ifelse(observer1 == "Max and Becca","Max and Becca",
-											ifelse(observer1 == "Patrick","Patrick", 
-								          		ifelse(observer1 == "Andry","Andry", 
-											ifelse(observer1 == "Daniel","Daniel", 
-											ifelse(observer1 == "Dessy","Dessy", 
-											ifelse(observer1 == "Francis","Francis", 
-											ifelse(observer1 == "Laura","Laura", 
-											ifelse(observer1 == "Mampionona","Mampionona", 
-											ifelse(observer1 == "Elvis","Elvis", "Felana"
-											))))))))))))
-							idToRemove	<- overlappingFocals[overlappingFocals$observer != observerToKeep,"focalid"]
-							subset	<- subset[subset$focalid != idToRemove,]
+		if (dim(subset)[1] >= 2){
+			for (k in 1:(dim(subset)[1]-1)){
+				for (m in (k+1):(dim(subset)[1])){
+					#print(k)
+					#print(m)
+					#print(dim(subset))
+					focal1	<- interval(start = subset[k,"start_time"],end = subset[k,"stop_time"])
+					focal2	<- interval(start = subset[m,"start_time"],end = subset[m,"stop_time"])
+					if (is.na(focal1)==FALSE & is.na(focal2)==FALSE){
+						if (int_overlaps(focal1,focal2)){
+							observers	<- unique(subset[c(k,m),"observer"])
+							overlappingFocals	<- subset[c(k,m),]
+							if (length(observers) > 1){
+								observer1		<- observers[1]
+								observerToKeep	<- ifelse(observer1 == "Becca","Becca",
+												ifelse(observer1 == "Meredith","Meredith",
+												ifelse(observer1 == "Max", "Max",
+												ifelse(observer1 == "Max and Becca","Max and Becca",
+												ifelse(observer1 == "Patrick","Patrick", 
+								          			ifelse(observer1 == "Andry","Andry", 
+												ifelse(observer1 == "Daniel","Daniel", 
+												ifelse(observer1 == "Dessy","Dessy", 
+												ifelse(observer1 == "Francis","Francis", 
+												ifelse(observer1 == "Laura","Laura", 
+												ifelse(observer1 == "Mampionona","Mampionona", 
+												ifelse(observer1 == "Elvis","Elvis", "Felana"
+												))))))))))))
+								idToRemove	<- overlappingFocals[overlappingFocals$observer != observerToKeep,"focalid"]
+								subset	<- subset[subset$focalid != idToRemove,]
+							}
 						}
 					}
 				}
 			}
 		}
-		print(dim(subset))
-		print(dim(fullFocalListNonOverlapping))
+		#print(dim(subset))
+		#print(dim(fullFocalListNonOverlapping))
 		fullFocalListNonOverlapping	<- rbind.data.frame(fullFocalListNonOverlapping,subset)
-		print(dim(fullFocalListNonOverlapping))
+		#print(dim(fullFocalListNonOverlapping))
 	}
 }
 
@@ -156,11 +163,27 @@ for (i in 1:dim(fullFocalList)[1]){
 }
 
 #write.csv(socialData,"socialDataWithFocalIds.csv")
+##############################################
+### Identify Which Focals Need Social Data ###
+##############################################
+socialDataWithId	<- read.csv("socialDataWithFocalIds.csv")
+focalsNoSocialData	<- fullFocallList[!fullFocalList$focalid%in%unique(socialDataWithId$focalID),]
+
+summarizeNNFocals			<- aggregate(nn$yes_socialdata,by=list(focalid = nn$focalid, date = nn$date, group = nn$group, focal = nn$focal_animal), FUN = sum)
+trulyNoSocialDataNN		<- fullFocalList[fullFocalList$focalid%in%summarizeNNFocals[summarizeNNFocals$x==0,"focalid"],]
+socialDataNeedsEnteringNN	<- fullFocalList[fullFocalList$focalid%in%summarizeNNFocals[summarizeNNFocals$x>0,"focalid"],]
+
+summarizeActvFocals		<- aggregate(actv$yes_socialdata,by=list(focalid = actv$focalid, date = actv$date, group = actv$group, focal = actv$focal_animal), FUN = sum)
+trulyNoSocialDataActv		<- fullFocalList[fullFocalList$focalid%in%summarizeActvFocals[summarizeActvFocals$x==0,"focalid"],]
+socialDataNeedsEnteringActv	<- fullFocalList[fullFocalList$focalid%in%summarizeActvFocals[summarizeActvFocals$x>0,"focalid"],]
+
+fileMakerTrulyNoSocialData	<- focalsNoSocialData[focalsNoSocialData$date<"2013-06-01",]
+focalsWithSocialDataOrTrulyNone	<- rbind.data.frame(fullFocalList[fullFocalList$focalid%in%unique(socialDataWithId$focalID),],trulyNoSocialDataActv,trulyNoSocialDataNN,fileMakerTrulyNoSocialData)
+socialDataFinal			<- socialDataWithId[socialDataWithId$focalID%in%unique(focalsWithSocialDataOrTrulyNone$focalid),]
 
 ##################################################
 ### Old code for matching scans and continuous ###
 ##################################################
-
 socialDayObserverSum	<- aggregate(socialDataSub$Date, by = list(observer = socialDataSub$Observer, date = socialDataSub$Date), FUN = length)
 scanDayObserverSum	<- aggregate(scanDataSub$Date, by = list(observer = scanDataSub$Observer, date = scanDataSub$Date), FUN = length)
 andryScan			<- scanDataSub[scanDataSub$Observer == 'Andry',]
