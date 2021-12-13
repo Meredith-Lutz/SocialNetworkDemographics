@@ -167,6 +167,11 @@ for (i in 1:nrow(fullFocalList)){
 }
 
 #write.csv(socialData,"socialDataWithFocalIds.csv")
+##############################################
+### Identify Which Focals Need Social Data ###
+##############################################
+socialDataWithId	<- read.csv("socialDataWithFocalIds.csv")
+focalsNoSocialData	<- fullFocallList[!fullFocalList$focalid%in%unique(socialDataWithId$focalID),]
 
 ##############################################
 ### Identify Which Focals Need Social Data ###
