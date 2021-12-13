@@ -2,19 +2,19 @@
 ##### Long term network demographics - KMNP #####
 #####      Last updated by ML 12/1/2021     #####
 #################################################
-setwd("C:/Users/cecil/OneDrive/Desktop/SDC Work")
-#setwd('G:/My Drive/Graduate School/Research/Projects/KMNPLongTermData/NSF Analyses')
+#setwd("C:/Users/cecil/OneDrive/Desktop/SDC Work")
+setwd('G:/My Drive/Graduate School/Research/Projects/KMNPLongTermData/NSF Analyses')
 
 library(stringr)
 library(lme4)
 library(lubridate)
 
-source("C:/Users/cecil/OneDrive/Desktop/SDC Work/Github Work/NSFSocialNetwork2/NSFSocialNetwork/ObservationTimeFunctions.R")
-#source('G:/My Drive/Graduate School/Research/Projects/KMNPLongTermData/NSF Analyses/NSFSocialNetwork/ObservationTimeFunctions.R')
-source("C:/Users/cecil/OneDrive/Desktop/SDC Work/Github Work/SeasonalNetworkAnalyses/createNetworkFunction.R")
-#source('G:/My Drive/Graduate School/Research/Projects/TemporalNets/SeasonalNetworkAnalyses/createNetworkFunction.R')
+#source("C:/Users/cecil/OneDrive/Desktop/SDC Work/Github Work/NSFSocialNetwork2/NSFSocialNetwork/ObservationTimeFunctions.R")
+source('G:/My Drive/Graduate School/Research/Projects/KMNPLongTermData/NSF Analyses/NSFSocialNetwork/ObservationTimeFunctions.R')
+#source("C:/Users/cecil/OneDrive/Desktop/SDC Work/Github Work/SeasonalNetworkAnalyses/createNetworkFunction.R")
+source('G:/My Drive/Graduate School/Research/Projects/TemporalNets/SeasonalNetworkAnalyses/createNetworkFunction.R')
 
-socialDataRaw		<- read.csv('All_nonSuppStudent_Social_Data_through_2019_Francis duplicates deleted_Jul262021_ML_2021_11_10 (1).csv', stringsAsFactors = FALSE)
+socialDataRaw		<- read.csv('All_nonSuppStudent_Social_Data_through_2019_Francis duplicates deleted_Jul262021_ML_2021_11_10.csv', stringsAsFactors = FALSE)
 groups			<- read.csv('Compiled Group File with some data deleted for BL analysis_Nov 3 2021_ML Corrected11Nov2021.csv', stringsAsFactors = FALSE)
 nnFocalList			<- read.csv('NearestNeighborIDs_TMM_ML_01Dec2021.csv', stringsAsFactors = FALSE)
 actvFocalList		<- read.csv('FocalActivityIDs_TMM_ML_01Dec2021.csv', stringsAsFactors = FALSE)
@@ -44,7 +44,7 @@ socialData		<- socialDataAllRaw[socialDataAllRaw$Initiator %in% sifakaNames & so
 socialDataRemoved	<- socialDataAllRaw[!(socialDataAllRaw$Initiator %in% sifakaNames & socialDataAllRaw$Receiver %in% sifakaNames),]
 
 #Merging groupNames back onto socialData
-socialData	<- merge(socialData,groups[,1:3], by.x = c("Date", "Focal"),by.y = c("date", "animal"), all.x = TRUE)
+socialData	<- merge(socialDataRaw,groups[,1:3], by.x = c("Date", "Focal"),by.y = c("date", "animal"), all.x = TRUE)
 
 socialData$monthNum	<- ifelse(socialData$Month == 'Jan', '01', 
 					ifelse(socialData$Month == 'Feb', '02',
@@ -127,8 +127,12 @@ for (i in uniqueDates){
 ##################################################
 socialData$focalID		<- NA
 fullFocalList$adjStopTime	<- NA
+socialData$Start			<- as.POSIXlt(socialData$Start, format = "%H:%M:%S")
+socialData$Stop			<- as.POSIXlt(socialData$Stop, format = "%H:%M:%S")
+fullFocalList$start_time	<- as.POSIXlt(fullFocalList$start_time, format = "%H:%M:%S")
+fullFocalList$stop_time		<- as.POSIXlt(fullFocalList$stop_time, format = "%H:%M:%S")
 
-for (i in 1:dim(fullFocalList)[1]){ 
+for (i in 1:nrow(fullFocalList)){
 	print(i)
 	focalObserver	<- fullFocalList[i,"observer"]
 	#print(focalObserver)
@@ -141,7 +145,7 @@ for (i in 1:dim(fullFocalList)[1]){
 	focalStopTime	<- fullFocalList[i,"stop_time"]
 	#print(focalStopTime)
 	focalid		<- fullFocalList[i,"focalid"]
-	
+	print(class(focalStartTime))
 	socialData[socialData$Observer == focalObserver &
 			socialData$Focal == focalAnimal & socialData$Date == focalDate & is.na(socialData$Start) == FALSE &
 			socialData$Start >= focalStartTime & socialData$Start <= focalStopTime, "focalID"]	<- focalid 
@@ -163,77 +167,34 @@ for (i in 1:dim(fullFocalList)[1]){
 }
 
 #write.csv(socialData,"socialDataWithFocalIds.csv")
+
 ##############################################
 ### Identify Which Focals Need Social Data ###
 ##############################################
-socialDataWithId	<- read.csv("socialDataWithFocalIds.csv")
-focalsNoSocialData	<- fullFocallList[!fullFocalList$focalid%in%unique(socialDataWithId$focalID),]
+socialDataWithID		<- read.csv("socialDataWithFocalIds.csv")
+focalsNoSocialData	<- fullFocalList[!fullFocalList$focalid%in%unique(socialDataWithId$focalID),]
 
 summarizeNNFocals			<- aggregate(nn$yes_socialdata,by=list(focalid = nn$focalid, date = nn$date, group = nn$group, focal = nn$focal_animal), FUN = sum)
-trulyNoSocialDataNN		<- fullFocalList[fullFocalList$focalid%in%summarizeNNFocals[summarizeNNFocals$x==0,"focalid"],]
-socialDataNeedsEnteringNN	<- fullFocalList[fullFocalList$focalid%in%summarizeNNFocals[summarizeNNFocals$x>0,"focalid"],]
+trulyNoSocialDataNN		<- fullFocalList[fullFocalList$focalid %in% summarizeNNFocals[summarizeNNFocals$x == 0, "focalid"],]
+socialDataNeedsEnteringNN	<- fullFocalList[fullFocalList$focalid %in% summarizeNNFocals[summarizeNNFocals$x > 0, "focalid"],]
 
 summarizeActvFocals		<- aggregate(actv$yes_socialdata,by=list(focalid = actv$focalid, date = actv$date, group = actv$group, focal = actv$focal_animal), FUN = sum)
-trulyNoSocialDataActv		<- fullFocalList[fullFocalList$focalid%in%summarizeActvFocals[summarizeActvFocals$x==0,"focalid"],]
-socialDataNeedsEnteringActv	<- fullFocalList[fullFocalList$focalid%in%summarizeActvFocals[summarizeActvFocals$x>0,"focalid"],]
+trulyNoSocialDataActv		<- fullFocalList[fullFocalList$focalid %in% summarizeActvFocals[summarizeActvFocals$x == 0, "focalid"],]
+socialDataNeedsEnteringActv	<- fullFocalList[fullFocalList$focalid %in% summarizeActvFocals[summarizeActvFocals$x > 0, "focalid"],]
 
-fileMakerTrulyNoSocialData	<- focalsNoSocialData[focalsNoSocialData$date<"2013-06-01",]
-focalsWithSocialDataOrTrulyNone	<- rbind.data.frame(fullFocalList[fullFocalList$focalid%in%unique(socialDataWithId$focalID),],trulyNoSocialDataActv,trulyNoSocialDataNN,fileMakerTrulyNoSocialData)
-socialDataFinal			<- socialDataWithId[socialDataWithId$focalID%in%unique(focalsWithSocialDataOrTrulyNone$focalid),]
+fileMakerTrulyNoSocialData		<- focalsNoSocialData[focalsNoSocialData$date < "2013-06-01",]
+focalsWithSocialDataOrTrulyNone	<- rbind.data.frame(fullFocalList[fullFocalList$focalid %in% unique(socialDataWithID$focalID), ], trulyNoSocialDataActv, trulyNoSocialDataNN, fileMakerTrulyNoSocialData)
+socialDataFinal				<- socialDataWithID[socialDataWithID$focalID %in% unique(focalsWithSocialDataOrTrulyNone$focalid), ]
+socialDataScansNeedEntered		<- socialDataWithID[!socialDataWithID$focalID %in% unique(focalsWithSocialDataOrTrulyNone$focalid), ]
 
-##################################################
-### Old code for matching scans and continuous ###
-##################################################
-socialDayObserverSum	<- aggregate(socialDataSub$Date, by = list(observer = socialDataSub$Observer, date = socialDataSub$Date), FUN = length)
-scanDayObserverSum	<- aggregate(scanDataSub$Date, by = list(observer = scanDataSub$Observer, date = scanDataSub$Date), FUN = length)
-andryScan			<- scanDataSub[scanDataSub$Observer == 'Andry',]
-danielScan			<- scanDataSub[scanDataSub$Observer == 'Daniel',]
-maxScan			<- scanDataSub[scanDataSub$Observer == 'Max',]
-francisScan			<- scanDataSub[scanDataSub$Observer == 'Francis',]
-patrickScan			<- scanDataSub[scanDataSub$Observer == 'Patrick',]
+write.csv(socialDataFinal, 'socialDataFinalForBLAnalysis2021-12-13.csv', row.names = FALSE)
+write.csv(focalsWithSocialDataOrTrulyNone, 'focalListFinalForBLAnalysis2021-12-13.csv', row.names = FALSE)
 
-days		<- sort(unique(c(socialDayObserverSum$date, scanDayObserverSum$date)))
-observers	<- sort(unique(c(socialDayObserverSum$observer, scanDayObserverSum$observer)))
-daysToRemoveFromScan	<- data.frame(observer = character(), date = character())
-daysToRemoveFromSocial	<- data.frame(observer = character(), date = character())
-for(i in 1:length(observers)){
-	obsNam	<- observers[i]
-	print(paste('Checking', obsNam, "'s data for errors"))
-	tempDaysToRemoveFromSocial	<- c()
-	tempDaysToRemoveFromScan	<- c()
-	for(j in days){ #0 means that data wasn't collected
-		nScans	<- scanDayObserverSum[scanDayObserverSum$observer == obsNam & scanDayObserverSum$date == j, 3]
-		#print(nScans)
-		nBehav	<- socialDayObserverSum[socialDayObserverSum$observer == obsNam & socialDayObserverSum$date == j, 3]
-		#print(nBehav)
-		if(length(nScans) == 0 & length(nBehav) != 0){
-			print(paste(obsNam, 'has social data but no scan data for', j))
-			tempDaysToRemoveFromSocial	<- c(tempDaysToRemoveFromSocial, j)
-		}
-		if(length(nScans) != 0 & length(nBehav) == 0){
-			print(paste(obsNam, 'has scan data but no social data for', j))
-			tempDaysToRemoveFromScan	<- c(tempDaysToRemoveFromScan, j)
-		}
-	}
-	print(paste('Finished checking', i, "'s data for errors."))
-	daysToRemoveFromScan		<- rbind(daysToRemoveFromScan, cbind(rep(obsNam, length(tempDaysToRemoveFromScan)), tempDaysToRemoveFromScan))
-	daysToRemoveFromSocial		<- rbind(daysToRemoveFromSocial, cbind(rep(obsNam, length(tempDaysToRemoveFromSocial)), tempDaysToRemoveFromSocial))
-
-}
-
-#Need to add Meredith's scan totals from the focal lengths since Scans are occasionally skipped in AO, but doesn't reflect obstime
-scanFinal	<- scanDataSub[(scanDataSub$Observer == 'Patrick' & ! (scanDataSub$Date %in% daysToRemoveFromScan[daysToRemoveFromScan[, 1] == 'Patrick', 2])) | 
-				(scanDataSub$Observer == 'Andry' & ! (scanDataSub$Date %in% daysToRemoveFromScan[daysToRemoveFromScan[, 1] == 'Andry', 2])) |
-				(scanDataSub$Observer == 'Daniel' & ! (scanDataSub$Date %in% daysToRemoveFromScan[daysToRemoveFromScan[, 1] == 'Daniel', 2])) |
-				(scanDataSub$Observer == 'Francis' & ! (scanDataSub$Date %in% daysToRemoveFromScan[daysToRemoveFromScan[, 1] == 'Francis', 2])) |
-				(scanDataSub$Observer == 'Max' & ! (scanDataSub$Date %in% daysToRemoveFromScan[daysToRemoveFromScan[,1 ] == 'Max', 2])),]
-
-socialFinal	<- socialDataSub[(socialDataSub$Observer == 'Patrick' & ! (socialDataSub$Date %in% daysToRemoveFromSocial[daysToRemoveFromSocial[, 1] == 'Patrick', 2])) | 
-				(socialDataSub$Observer == 'Andry' & ! (socialDataSub$Date %in% daysToRemoveFromSocial[daysToRemoveFromSocial[, 1] == 'Andry', 2])) |
-				(socialDataSub$Observer == 'Daniel' & ! (socialDataSub$Date %in% daysToRemoveFromSocial[daysToRemoveFromSocial[, 1] == 'Daniel', 2])) |
-				(socialDataSub$Observer == 'Francis' & ! (socialDataSub$Date %in% daysToRemoveFromSocial[daysToRemoveFromSocial[, 1] == 'Francis', 2])) |
-				(socialDataSub$Observer == 'Meredith') | 
-				(socialDataSub$Observer == 'Max'),]
+write.csv(socialDataNeedsEnteringActv, 'socialDataNeedEnteringFocalActivity2021-12-13.csv', row.names = FALSE)
+write.csv(socialDataNeedsEnteringNN, 'socialDataNeedEnteringNearestNeighbor2021-12-13.csv', row.names = FALSE)
+write.csv(trulyNoSocialDataNN, 'NoSocialDataNearestNeighbor2021-12-13.csv', row.names = FALSE)
+write.csv(trulyNoSocialDataActv, 'NoSocialDataFocalActivity2021-12-13.csv', row.names = FALSE)
+write.csv(socialDataScansNeedEntered, 'socialDataMissingInstantaneousData2021-12-13.csv', row.names = FALSE)
 
 ########################
 ### Generate dataset ###
