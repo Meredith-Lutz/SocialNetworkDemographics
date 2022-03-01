@@ -240,6 +240,10 @@ socialRates	<- socialRates[socialRates$actor != socialRates$recip, ]
 ###############################
 ### Generate network slices ###
 ###############################
+#Need to change this to calculate full community every three months (look within group)
+#Do analyses averaging every three months for each group, then average across each group
+#Need to integrate the focal lists
+#Need to switch it to continuous data
 nn$monthNum	<- as.numeric(nn$monthNum)
 nn$season	<- ifelse(nn$monthNum <= 3, 'mating',
 			ifelse(nn$monthNum >= 4 & nn$month <= 6, 'gestation',
