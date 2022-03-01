@@ -145,7 +145,7 @@ for (i in 1:nrow(fullFocalList)){
 	focalStopTime	<- fullFocalList[i,"stop_time"]
 	#print(focalStopTime)
 	focalid		<- fullFocalList[i,"focalid"]
-	print(class(focalStartTime))
+	#print(class(focalStartTime))
 	socialData[socialData$Observer == focalObserver &
 			socialData$Focal == focalAnimal & socialData$Date == focalDate & is.na(socialData$Start) == FALSE &
 			socialData$Start >= focalStartTime & socialData$Start <= focalStopTime, "focalID"]	<- focalid 
@@ -166,17 +166,19 @@ for (i in 1:nrow(fullFocalList)){
 	}
 }
 
-#write.csv(socialData,"socialDataWithFocalIds.csv")
-##############################################
-### Identify Which Focals Need Social Data ###
-##############################################
-socialDataWithId	<- read.csv("socialDataWithFocalIds.csv")
-focalsNoSocialData	<- fullFocallList[!fullFocalList$focalid%in%unique(socialDataWithId$focalID),]
+socialData$Start	<- format(socialData$Start, format = '%H:%M:%S')
+socialData$Stop	<- format(socialData$Stop, format = '%H:%M:%S')
+
+write.csv(socialData, "allSocialDataWithFocalIDs.csv", row.names = FALSE)
 
 ##############################################
 ### Identify Which Focals Need Social Data ###
 ##############################################
-socialDataWithID		<- read.csv("socialDataWithFocalIds.csv")
+socialDataWithID		<- read.csv("allSocialDataWithFocalIDs.csv")
+
+fullFocalList$start_time	<- format(fullFocalList$start_time, format = "%H:%M:%S")
+fullFocalList$stop_time		<- format(fullFocalList$stop_time, format = "%H:%M:%S")
+
 focalsNoSocialData	<- fullFocalList[!fullFocalList$focalid%in%unique(socialDataWithId$focalID),]
 
 summarizeNNFocals			<- aggregate(nn$yes_socialdata,by=list(focalid = nn$focalid, date = nn$date, group = nn$group, focal = nn$focal_animal), FUN = sum)
@@ -193,13 +195,13 @@ socialDataFinal				<- socialDataWithID[socialDataWithID$focalID %in% unique(foca
 socialDataScansNeedEntered		<- socialDataWithID[!socialDataWithID$focalID %in% unique(focalsWithSocialDataOrTrulyNone$focalid), ]
 
 write.csv(socialDataFinal, 'socialDataFinalForBLAnalysis2021-12-13.csv', row.names = FALSE)
-write.csv(focalsWithSocialDataOrTrulyNone, 'focalListFinalForBLAnalysis2021-12-13.csv', row.names = FALSE)
+write.csv(focalsWithSocialDataOrTrulyNone[,1:9], 'focalListFinalForBLAnalysis2021-12-13.csv', row.names = FALSE)
 
-write.csv(socialDataNeedsEnteringActv, 'socialDataNeedEnteringFocalActivity2021-12-13.csv', row.names = FALSE)
-write.csv(socialDataNeedsEnteringNN, 'socialDataNeedEnteringNearestNeighbor2021-12-13.csv', row.names = FALSE)
-write.csv(trulyNoSocialDataNN, 'NoSocialDataNearestNeighbor2021-12-13.csv', row.names = FALSE)
-write.csv(trulyNoSocialDataActv, 'NoSocialDataFocalActivity2021-12-13.csv', row.names = FALSE)
-write.csv(socialDataScansNeedEntered, 'socialDataMissingInstantaneousData2021-12-13.csv', row.names = FALSE)
+write.csv(socialDataNeedsEnteringActv[,1:9], 'socialDataMissingFocalActivityEntered2021-12-13.csv', row.names = FALSE)
+write.csv(socialDataNeedsEnteringNN[,1:9], 'socialDataMissingNearestNeighborEntered2021-12-13.csv', row.names = FALSE)
+write.csv(trulyNoSocialDataNN[,1:9], 'NoSocialDataNearestNeighbor2021-12-13.csv', row.names = FALSE)
+write.csv(trulyNoSocialDataActv[,1:9], 'NoSocialDataFocalActivity2021-12-13.csv', row.names = FALSE)
+write.csv(socialDataScansNeedEntered, 'instantaneousDataMissingSocialEntered2021-12-13.csv', row.names = FALSE)
 
 ########################
 ### Generate dataset ###
