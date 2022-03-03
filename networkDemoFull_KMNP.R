@@ -14,11 +14,11 @@ source('G:/My Drive/Graduate School/Research/Projects/KMNPLongTermData/NSF Analy
 #source("C:/Users/cecil/OneDrive/Desktop/SDC Work/Github Work/SeasonalNetworkAnalyses/createNetworkFunction.R")
 source('G:/My Drive/Graduate School/Research/Projects/TemporalNets/SeasonalNetworkAnalyses/createNetworkFunction.R')
 
-socialDataRaw		<- read.csv('All_nonSuppStudent_Social_Data_through_2019_Francis duplicates deleted_Jul262021_ML_2021_11_10.csv', stringsAsFactors = FALSE)
-groups			<- read.csv('Compiled Group File with some data deleted for BL analysis_Nov 3 2021_ML Corrected11Nov2021.csv', stringsAsFactors = FALSE)
+socialDataRaw			<- read.csv('All_nonSuppStudent_Social_Data_through_2019_Francis duplicates deleted_Jul262021_ML_2021_11_10.csv', stringsAsFactors = FALSE)
+groups				<- read.csv('Compiled Group File with some data deleted for BL analysis_Nov 3 2021_ML Corrected11Nov2021.csv', stringsAsFactors = FALSE)
 nnFocalList			<- read.csv('NearestNeighborIDs_TMM_ML_01Dec2021.csv', stringsAsFactors = FALSE)
-actvFocalList		<- read.csv('FocalActivityIDs_TMM_ML_01Dec2021.csv', stringsAsFactors = FALSE)
-filemakerFocalList	<- read.csv('FileMakerIDs_ML_06Dec2021.csv', stringsAsFactors = FALSE)
+actvFocalList			<- read.csv('FocalActivityIDs_TMM_ML_01Dec2021.csv', stringsAsFactors = FALSE)
+filemakerFocalList		<- read.csv('FileMakerIDs_ML_06Dec2021.csv', stringsAsFactors = FALSE)
 nn				<- read.csv('NearestNeighbor_TMM_ML_01Dec2021.csv', stringsAsFactors = FALSE)
 actv				<- read.csv('FocalActivity_TMM_ML_11Nov2021.csv', stringsAsFactors = FALSE)
 fm				<- read.csv('FileMaker_ML_01Dec2021.csv', stringsAsFactors = FALSE)
@@ -127,7 +127,7 @@ for (i in uniqueDates){
 ##################################################
 socialData$focalID		<- NA
 fullFocalList$adjStopTime	<- NA
-socialData$Start			<- as.POSIXlt(socialData$Start, format = "%H:%M:%S")
+socialData$Start		<- as.POSIXlt(socialData$Start, format = "%H:%M:%S")
 socialData$Stop			<- as.POSIXlt(socialData$Stop, format = "%H:%M:%S")
 fullFocalList$start_time	<- as.POSIXlt(fullFocalList$start_time, format = "%H:%M:%S")
 fullFocalList$stop_time		<- as.POSIXlt(fullFocalList$stop_time, format = "%H:%M:%S")
@@ -179,9 +179,9 @@ socialDataWithID		<- read.csv("allSocialDataWithFocalIDs.csv")
 fullFocalList$start_time	<- format(fullFocalList$start_time, format = "%H:%M:%S")
 fullFocalList$stop_time		<- format(fullFocalList$stop_time, format = "%H:%M:%S")
 
-focalsNoSocialData	<- fullFocalList[!fullFocalList$focalid%in%unique(socialDataWithId$focalID),]
+focalsNoSocialData		<- fullFocalList[!fullFocalList$focalid%in%unique(socialDataWithId$focalID),]
 
-summarizeNNFocals			<- aggregate(nn$yes_socialdata,by=list(focalid = nn$focalid, date = nn$date, group = nn$group, focal = nn$focal_animal), FUN = sum)
+summarizeNNFocals		<- aggregate(nn$yes_socialdata,by=list(focalid = nn$focalid, date = nn$date, group = nn$group, focal = nn$focal_animal), FUN = sum)
 trulyNoSocialDataNN		<- fullFocalList[fullFocalList$focalid %in% summarizeNNFocals[summarizeNNFocals$x == 0, "focalid"],]
 socialDataNeedsEnteringNN	<- fullFocalList[fullFocalList$focalid %in% summarizeNNFocals[summarizeNNFocals$x > 0, "focalid"],]
 
@@ -189,10 +189,10 @@ summarizeActvFocals		<- aggregate(actv$yes_socialdata,by=list(focalid = actv$foc
 trulyNoSocialDataActv		<- fullFocalList[fullFocalList$focalid %in% summarizeActvFocals[summarizeActvFocals$x == 0, "focalid"],]
 socialDataNeedsEnteringActv	<- fullFocalList[fullFocalList$focalid %in% summarizeActvFocals[summarizeActvFocals$x > 0, "focalid"],]
 
-fileMakerTrulyNoSocialData		<- focalsNoSocialData[focalsNoSocialData$date < "2013-06-01",]
+fileMakerTrulyNoSocialData	<- focalsNoSocialData[focalsNoSocialData$date < "2013-06-01",]
 focalsWithSocialDataOrTrulyNone	<- rbind.data.frame(fullFocalList[fullFocalList$focalid %in% unique(socialDataWithID$focalID), ], trulyNoSocialDataActv, trulyNoSocialDataNN, fileMakerTrulyNoSocialData)
-socialDataFinal				<- socialDataWithID[socialDataWithID$focalID %in% unique(focalsWithSocialDataOrTrulyNone$focalid), ]
-socialDataScansNeedEntered		<- socialDataWithID[!socialDataWithID$focalID %in% unique(focalsWithSocialDataOrTrulyNone$focalid), ]
+socialDataFinal			<- socialDataWithID[socialDataWithID$focalID %in% unique(focalsWithSocialDataOrTrulyNone$focalid), ]
+socialDataScansNeedEntered	<- socialDataWithID[!socialDataWithID$focalID %in% unique(focalsWithSocialDataOrTrulyNone$focalid), ]
 
 write.csv(socialDataFinal, 'socialDataFinalForBLAnalysis2021-12-13.csv', row.names = FALSE)
 write.csv(focalsWithSocialDataOrTrulyNone[,1:9], 'focalListFinalForBLAnalysis2021-12-13.csv', row.names = FALSE)
@@ -244,6 +244,7 @@ socialRates	<- socialRates[socialRates$actor != socialRates$recip, ]
 #Do analyses averaging every three months for each group, then average across each group
 #Need to integrate the focal lists
 #Need to switch it to continuous data
+
 nn$monthNum	<- as.numeric(nn$monthNum)
 nn$season	<- ifelse(nn$monthNum <= 3, 'mating',
 			ifelse(nn$monthNum >= 4 & nn$month <= 6, 'gestation',

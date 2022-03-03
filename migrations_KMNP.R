@@ -12,7 +12,7 @@ source("C:/Users/cecil/OneDrive/Desktop/SDC Work/Github Work/SeasonalNetworkAnal
 socialDataRaw		<- read.csv('All_nonSuppStudent_Social_Data_through_2019_Francis duplicates deleted_Jul262021_ML_2021_11_10 (1).csv', stringsAsFactors = FALSE)
 matingSeasonStudent 	<- read.csv('studentMatingSeason_BL updates Jul232021_MLEdits.csv', stringsAsFactors = FALSE)
 groups			<- read.csv('Compiled Group File with some data deleted for BL analysis_Nov 3 2021_ML Corrected11Nov2021.csv', stringsAsFactors = FALSE)
-nnFocalList			<- read.csv('NearestNeighborIDs_TMM_ML_10Nov2021.csv', stringsAsFactors = FALSE)
+nnFocalList		<- read.csv('NearestNeighborIDs_TMM_ML_10Nov2021.csv', stringsAsFactors = FALSE)
 actvFocalList		<- read.csv('FocalActivityIDs_TMM_ML_11Nov2021.csv', stringsAsFactors = FALSE)
 filemakerFocalList	<- read.csv('FileMakerIDs_ML_11Oct2021.csv', stringsAsFactors = FALSE)
 
@@ -70,9 +70,6 @@ scansPerMonthPerGroup	<- scansPerMonthPerGroup[order(scansPerMonthPerGroup$month
 scansPerMonthPerGroupNoSolitary	<- scansPerMonthPerGroup[scansPerMonthPerGroup$group%in%c("I","II","III","IV","V","VI","XI","XII"),]
 plot.default(as.factor(scansPerMonthPerGroupNoSolitary$month), scansPerMonthPerGroupNoSolitary$x/6, col = as.factor(scansPerMonthPerGroupNoSolitary$group), pch = 16, ylab = "Hours of Observation")
 legend("topleft", legend = c("I","II","III","IV","V","VI","XI","XII"),col = 1:8, pch = 16)
-
-
-##Need to create this as a function that can be given to others
 
 ##############################################
 ### Write Functions for Migration Analysis ###
