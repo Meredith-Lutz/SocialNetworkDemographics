@@ -2,23 +2,23 @@
 ##### Long term network demographics - KMNP #####
 #####      Last updated by ML 12/1/2021     #####
 #################################################
-#setwd("C:/Users/cecil/OneDrive/Desktop/SDC Work")
-setwd('G:/My Drive/Graduate School/Research/Projects/KMNPLongTermData/NSF Analyses')
+setwd("C:/Users/cecil/OneDrive/Desktop/SDC Work")
+#setwd('G:/My Drive/Graduate School/Research/Projects/KMNPLongTermData/NSF Analyses')
 
 library(stringr)
 library(lme4)
 library(lubridate)
 
-#source("C:/Users/cecil/OneDrive/Desktop/SDC Work/Github Work/NSFSocialNetwork2/NSFSocialNetwork/ObservationTimeFunctions.R")
-source('G:/My Drive/Graduate School/Research/Projects/KMNPLongTermData/NSF Analyses/NSFSocialNetwork/ObservationTimeFunctions.R')
-#source("C:/Users/cecil/OneDrive/Desktop/SDC Work/Github Work/SeasonalNetworkAnalyses/createNetworkFunction.R")
-source('G:/My Drive/Graduate School/Research/Projects/TemporalNets/SeasonalNetworkAnalyses/createNetworkFunction.R')
+source("C:/Users/cecil/OneDrive/Desktop/SDC Work/Github Work/NSFSocialNetwork2/NSFSocialNetwork/ObservationTimeFunctions.R")
+#source('G:/My Drive/Graduate School/Research/Projects/KMNPLongTermData/NSF Analyses/NSFSocialNetwork/ObservationTimeFunctions.R')
+source("C:/Users/cecil/OneDrive/Desktop/SDC Work/Github Work/SeasonalNetworkAnalyses/createNetworkFunction.R")
+#source('G:/My Drive/Graduate School/Research/Projects/TemporalNets/SeasonalNetworkAnalyses/createNetworkFunction.R')
 
-socialDataRaw			<- read.csv('All_nonSuppStudent_Social_Data_through_2019_Francis duplicates deleted_Jul262021_ML_2021_11_10.csv', stringsAsFactors = FALSE)
-groups				<- read.csv('Compiled Group File with some data deleted for BL analysis_Nov 3 2021_ML Corrected11Nov2021.csv', stringsAsFactors = FALSE)
+socialDataRaw		<- read.csv('All_nonSuppStudent_Social_Data_through_2019_Francis duplicates deleted_Jul262021_ML_2021_11_10.csv', stringsAsFactors = FALSE)
+groups			<- read.csv('Compiled Group File with some data deleted for BL analysis_Nov 3 2021_ML Corrected11Nov2021.csv', stringsAsFactors = FALSE)
 nnFocalList			<- read.csv('NearestNeighborIDs_TMM_ML_01Dec2021.csv', stringsAsFactors = FALSE)
-actvFocalList			<- read.csv('FocalActivityIDs_TMM_ML_01Dec2021.csv', stringsAsFactors = FALSE)
-filemakerFocalList		<- read.csv('FileMakerIDs_ML_06Dec2021.csv', stringsAsFactors = FALSE)
+actvFocalList		<- read.csv('FocalActivityIDs_TMM_ML_01Dec2021.csv', stringsAsFactors = FALSE)
+filemakerFocalList	<- read.csv('FileMakerIDs_ML_06Dec2021.csv', stringsAsFactors = FALSE)
 nn				<- read.csv('NearestNeighbor_TMM_ML_01Dec2021.csv', stringsAsFactors = FALSE)
 actv				<- read.csv('FocalActivity_TMM_ML_11Nov2021.csv', stringsAsFactors = FALSE)
 fm				<- read.csv('FileMaker_ML_01Dec2021.csv', stringsAsFactors = FALSE)
@@ -203,99 +203,56 @@ write.csv(trulyNoSocialDataNN[,1:9], 'NoSocialDataNearestNeighbor2021-12-13.csv'
 write.csv(trulyNoSocialDataActv[,1:9], 'NoSocialDataFocalActivity2021-12-13.csv', row.names = FALSE)
 write.csv(socialDataScansNeedEntered, 'instantaneousDataMissingSocialEntered2021-12-13.csv', row.names = FALSE)
 
-########################
-### Generate dataset ###
-########################
-
-socialRates	<- data.frame(actor = character(), recip = character(), group = character(), dyadID = character(), numHours = numeric(), 
-		durGrm = numeric(), durPly = numeric(), ageDiff = numeric(), sexMatch = character())
-
-listAnimals	<- list(gp1, gp2, gp3, gp6, gp12)
-for(i in 1:length(listAnimals)){
-	group	<- listAnimals[[i]]
-	for(j in 1:length(group)){
-		actor	<- group[[j]]
-		for(k in 1:length(group)){
-			recip	<- group[[k]]
-			group_id	<- i
-			dyadID	<- paste(sort(c(actor, recip))[1], sort(c(actor, recip))[2], sep = '')
-			numHours	<- obsTimeByAnimal[obsTimeByAnimal$focal_individual_id == actor, 2] + obsTimeByAnimal[obsTimeByAnimal$focal_individual_id == recip, 2]
-			groom		<- socialFinal[socialFinal$Initiator == actor & socialFinal$Receiver == recip & (socialFinal$Behavior == 'Groom' | socialFinal$Behavior == 'Mututal_groom'), ]
-			groomMin	<- sum(groom$Duration.Seconds)/60
-			play		<- socialFinal[socialFinal$Initiator == actor & socialFinal$Receiver == recip & (socialFinal$Behavior == 'Play' | socialFinal$Behavior == 'Play_out_of_sight'), ]
-			playMin	<- sum(play$Duration.Seconds)/60
-			ageDiff	<- demo[demo$Individual.ID == actor, 'birthYear'] - demo[demo$Individual.ID == recip, 'birthYear']
-			sexMatch	<- ifelse(demo[demo$Individual.ID == actor, 'sex'] == 'M' & demo[demo$Individual.ID == recip, 'sex'] == 'M', 'MM',
-						ifelse(demo[demo$Individual.ID == actor, 'sex'] == 'F' & demo[demo$Individual.ID == recip, 'sex'] == 'F', 'FF', 'MF'))
-			line	<- c(actor, recip, group_id, dyadID, numHours, groomMin, playMin, ageDiff, sexMatch)
-			socialRates	<- rbind(socialRates, line)
-		}
-	}
-}
-
-colnames(socialRates)	<- c('actor', 'recip', 'group', 'dyadID', 'numHours', 'durGrm', 'durPly', 'ageDiff', 'sexMatch')
-
-socialRates	<- socialRates[socialRates$actor != socialRates$recip, ]
-
 ###############################
 ### Generate network slices ###
 ###############################
+socialDataWithID	<- read.csv("allSocialDataWithFocalIDs.csv", stringsAsFactors = FALSE)
+focalListsBL	<- read.csv("focalListFinalForBLAnalysis2021-12-13.csv", stringsAsFactors = FALSE)
+socialDataBL	<- read.csv("socialDataFinalForBLAnalysis2021-12-13.csv", stringsAsFactors = FALSE)
+
 #Need to change this to calculate full community every three months (look within group)
 #Do analyses averaging every three months for each group, then average across each group
 #Need to integrate the focal lists
 #Need to switch it to continuous data
 
-nn$monthNum	<- as.numeric(nn$monthNum)
-nn$season	<- ifelse(nn$monthNum <= 3, 'mating',
-			ifelse(nn$monthNum >= 4 & nn$month <= 6, 'gestation',
-			ifelse(nn$monthNum >= 7 & nn$month <= 9, 'birthing', 'lactation')))
+socialDataBL$season	<- ifelse(socialDataBL$monthNum <= 3, 'mating',
+				ifelse(socialDataBL$monthNum >= 4 & socialDataBL$month <= 6, 'gestation',
+				ifelse(socialDataBL$monthNum >= 7 & socialDataBL$month <= 9, 'birthing', 'lactation')))
+focalListsBL$monthNum	<-  as.numeric(data.frame(strsplit(focalListsBL$yearMonth, split = "-"))[2,])
+focalListsBL$year		<-  as.numeric(data.frame(strsplit(focalListsBL$yearMonth, split = "-"))[1,])
+focalListsBL$season	<- ifelse(focalListsBL$monthNum <= 3, 'mating',
+				ifelse(focalListsBL$monthNum >= 4 & focalListsBL$month <= 6, 'gestation',
+				ifelse(focalListsBL$monthNum >= 7 & focalListsBL$month <= 9, 'birthing', 'lactation')))
+socialDataBL$seasonID	<- factor(factor(socialDataBL$Year):factor(socialDataBL$season,levels=c("mating","gestation","birthing","lactation")))
+focalListsBL$seasonID	<- factor(factor(focalListsBL$year):factor(focalListsBL$season,levels=c("mating","gestation","birthing","lactation")))
 
-nn$Group	<- as.character(nn$Group)
-nn$Nearest.neighbor	<- as.character(nn$Nearest.neighbor)
+#duration is in minutes
+focalListsBL$start_time 	<- as.POSIXlt(focalListsBL$start_time, format = "%H:%M:%S")
+focalListsBL$stop_time 		<- as.POSIXlt(focalListsBL$stop_time, format = "%H:%M:%S")
+focalListsBL$focal_duration	<- focalListsBL$stop_time - focalListsBL$start_time
 
-nnNoSol		<- nn[nn$Group %in% c('I', 'II', 'III', 'IV', 'V', 'VI', 'XI', 'XII') & nn$Exclude_for_Analysis != 'Yes' & nn$Focal != nn$Nearest.neighbor,]
-nnNoSol$sliceID	<- paste(nnNoSol$Group, nnNoSol$Year, nnNoSol$season, sep = '-')
+focalDurationPerSeason		<- aggregate(focalListsBL$focal_duration, by = list(focalListsBL$seasonID), FUN = sum)
+minimumTotalFocalDuration	<- 600
+enoughData				<- focalDurationPerSeason[focalDurationPerSeason$x>=minimumTotalFocalDuration,]
 
-nScansForEnoughData	<- 250
-enoughData		<- aggregate(nnNoSol$sliceID, by = list(nnNoSol$sliceID), FUN = length)[aggregate(nnNoSol$sliceID, by = list(nnNoSol$sliceID), FUN = length)$x >= nScansForEnoughData,]
-
-#Get rid of unmarked animals
-nnNoUnmarked	<- nnNoSol[nnNoSol$Focal != 'Unmarked female' & nnNoSol$Focal != 'Unmarked male' & nnNoSol$nnWithinGroup != 'Unmarked male',]
-
-#########################################
-### Calculate networks for each slice ###
-#########################################
-distForContact	<- 0.1 #This is arbitrary and fixes the divide by 0 problem
-sliceIDs	<- enoughData[,1]
+#####################################################################
+### Calculate three month networks across population average time ###
+#####################################################################
+seasonIDs	<- enoughData[,1]
 listNets	<- list()
 
-for(i in sliceIDs){
+for(i in seasonIDs){
 	print(paste('Working on', i))
-	data		<- nnNoUnmarked[nnNoUnmarked$sliceID == i & is.na(nnNoUnmarked$cleanedNNDist) == FALSE & nnNoUnmarked$nnWithinGroup != '',]
+	data		<- socialDataBL[socialDataBL$seasonID == i,]
 	focals	<- as.character(unique(data[,c('Focal')]))
-	nns		<- as.character(unique(data[,c('nnWithinGroup')]))
-	animals	<- sort(unique(c(focals, nns)))
-	if(i == 'XI-birthing-2019'){ #This deals with the weird IGE/wrong focal name issue
-		animals	<- c('Albert', 'Barea', 'Syrup')
-	}
-	if(length(animals) > 2){
-		mat		<- matrix(, length(animals), length(animals), dimnames = list(animals, animals))
-		for(j in animals){
-			for(k in animals){
-				dataDyad	<- rbind(data[data$Focal == j & data$nnWithinGroup == k,], data[data$Focal == k & data$nnWithinGroup == j,])
-				dataDyad[dataDyad$cleanedNNDist == 0, 'cleanedNNDist']	<- distForContact
-				if(dim(dataDyad)[1] == 0){
-					mat[j, k]	<- 0
-				}
-				else{
-					dataDyad$weight	<- 1/dataDyad$cleanedNNDist
-					weight		<- mean(dataDyad$weight)
-					mat[j, k]		<- weight
-				}	
-			}
-		}
-		listNets[[i]]	<- mat
-	}
+	init		<- as.character(unique(data[,c('Initiator')]))
+	recip		<- as.character(unique(data[,c('Receiver')]))
+	animals	<- sort(unique(c(focals, init, recip)))
+	
+	#Use network construction function to create grooming contact agonistic network 
+	#Use obsMat function to create observation matrix
+	#Divide out obsMat to create rates
+	#Save rate to lists for behavior
 }
 
 #################################################
