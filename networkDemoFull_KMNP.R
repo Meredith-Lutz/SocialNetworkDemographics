@@ -241,18 +241,27 @@ enoughData				<- focalDurationPerSeason[focalDurationPerSeason$x>=minimumTotalFo
 seasonIDs	<- enoughData[,1]
 listNets	<- list()
 
-for(i in seasonIDs){
-	print(paste('Working on', i))
-	data		<- socialDataBL[socialDataBL$seasonID == i,]
-	focals	<- as.character(unique(data[,c('Focal')]))
-	init		<- as.character(unique(data[,c('Initiator')]))
-	recip		<- as.character(unique(data[,c('Receiver')]))
-	animals	<- sort(unique(c(focals, init, recip)))
+populationNetworksAvgTime	<- function(socialData, focalList, groupsFile, seasonIDs, behav, behavColNum){
+	for(i in seasonIDs){
+		print(paste('Working on', i))
+		data		<- socialData[socialData$seasonID == i & socialData[, behavColNum] == behav,]
+		focals	<- as.character(unique(data[,c('Focal')]))
+		init		<- as.character(unique(data[,c('Initiator')]))
+		recip		<- as.character(unique(data[,c('Receiver')]))
+		animals	<- sort(unique(c(focals, init, recip)))
 	
-	#Use network construction function to create grooming contact agonistic network 
-	#Use obsMat function to create observation matrix
-	#Divide out obsMat to create rates
-	#Save rate to lists for behavior
+		behavMat	<- createNet(data$Initiator, data$Receiver, data[, behavColNum], behav,
+					subjects = animals, directional = TRUE, type = "duration", durs = data$Duration.Seconds)
+		
+		year		<- as.numeric(strsplit(as.character(i), split = ":")[[1]][1])
+		seasonName	<- strsplit(as.character(i), split = ":")[[1]][2]
+		startDate	<- ifelse(seasonName == "mating", paste(year, "01-01", sep = "-"), 
+					ifelse(seasonName == "gestation",  paste(year, "04-01", sep = "-"), 
+					ifelse(seasonName == "birthing",  paste(year, "07-01", sep = "-"),
+					paste(year, "10-01", sep = "-"))))
+		#Divide out obsMat to create rates
+		#Save rate to lists for behavior
+	}
 }
 
 #################################################
