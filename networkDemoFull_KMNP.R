@@ -239,30 +239,44 @@ enoughData				<- focalDurationPerSeason[focalDurationPerSeason$x>=minimumTotalFo
 ### Calculate three month networks across population average time ###
 #####################################################################
 seasonIDs	<- enoughData[,1]
-listNets	<- list()
+grmNets	<- list()
 
-populationNetworksAvgTime	<- function(socialData, focalList, groupsFile, seasonIDs, behav, behavColNum){
-	for(i in seasonIDs){
-		print(paste('Working on', i))
-		data		<- socialData[socialData$seasonID == i & socialData[, behavColNum] == behav,]
-		focals	<- as.character(unique(data[,c('Focal')]))
-		init		<- as.character(unique(data[,c('Initiator')]))
-		recip		<- as.character(unique(data[,c('Receiver')]))
-		animals	<- sort(unique(c(focals, init, recip)))
+populationNetworksAvgTime	<- function(socialData, focalList, groupsFile, seasonIDs, behav, behavColNum, netList){
+	for(i in 1:length(seasonIDs)){
+		seasonID_i	<- seasonIDs[i]
+		print(paste('Working on', seasonID_i))
+		data		<- socialData[as.character(socialData$seasonID) == as.character(seasonID_i) &
+					 socialData[, behavColNum] == behav,]
+		if(nrow(data)> 0 ){
+			focals	<- as.character(unique(data[,c('Focal')]))
+			init		<- as.character(unique(data[,c('Initiator')]))
+			recip		<- as.character(unique(data[,c('Receiver')]))
+			animals	<- sort(unique(c(focals, init, recip)))
 	
-		behavMat	<- createNet(data$Initiator, data$Receiver, data[, behavColNum], behav,
-					subjects = animals, directional = TRUE, type = "duration", durs = data$Duration.Seconds)
+			behavMat	<- createNet(data$Initiator, data$Receiver, data[, behavColNum], behav,
+						subjects = animals, directional = TRUE, type = "duration", durs = data$Duration.Seconds)
 		
-		year		<- as.numeric(strsplit(as.character(i), split = ":")[[1]][1])
-		seasonName	<- strsplit(as.character(i), split = ":")[[1]][2]
-		startDate	<- ifelse(seasonName == "mating", paste(year, "01-01", sep = "-"), 
-					ifelse(seasonName == "gestation",  paste(year, "04-01", sep = "-"), 
-					ifelse(seasonName == "birthing",  paste(year, "07-01", sep = "-"),
-					paste(year, "10-01", sep = "-"))))
-		#Divide out obsMat to create rates
-		#Save rate to lists for behavior
+			year		<- as.numeric(strsplit(as.character(seasonID_i), split = ":")[[1]][1])
+			seasonName	<- strsplit(as.character(seasonID_i), split = ":")[[1]][2]
+			startDate	<- ifelse(seasonName == "mating", paste(year, "01-01", sep = "-"), 
+						ifelse(seasonName == "gestation",  paste(year, "04-01", sep = "-"), 
+						ifelse(seasonName == "birthing",  paste(year, "07-01", sep = "-"),
+						paste(year, "10-01", sep = "-"))))
+			stopDate	<- ifelse(seasonName == "mating", paste(year, "03-31", sep = "-"), 
+						ifelse(seasonName == "gestation",  paste(year, "06-30", sep = "-"), 
+						ifelse(seasonName == "birthing",  paste(year, "09-30", sep = "-"),
+						paste(year, "12-31", sep = "-"))))
+
+			obsMat	<- calculateObservationMatrix(focalList, groupsFile, startDate, stopDate, animals)
+			behavMatAdj	<- behavMat/obsMat
+			netList[[i]]<- behavMatAdj
+			names(netList)[i]	<- seasonID_i
+			#currently naming list elements by number and not seasonID
+		}
 	}
+	return(netList)
 }
+grmNets	<- populationNetworksAvgTime(socialDataBL, focalListsBL, groups, seasonIDs, "Groom", 17, grmNets)
 
 #################################################
 ### Calculate Edge Differentiability and plot ###
