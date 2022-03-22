@@ -1,18 +1,15 @@
 #################################################
 ##### Long term network demographics - KMNP #####
-#####      Last updated by ML 12/1/2021     #####
+#####      Last updated by ML 3/21/2021     #####
 #################################################
-setwd("C:/Users/cecil/OneDrive/Desktop/SDC Work")
-#setwd('G:/My Drive/Graduate School/Research/Projects/KMNPLongTermData/NSF Analyses')
+setwd('G:/My Drive/Graduate School/Research/Projects/KMNPLongTermData/NSF Analyses')
 
 library(stringr)
 library(lme4)
 library(lubridate)
 
-source("C:/Users/cecil/OneDrive/Desktop/SDC Work/Github Work/NSFSocialNetwork2/NSFSocialNetwork/ObservationTimeFunctions.R")
-#source('G:/My Drive/Graduate School/Research/Projects/KMNPLongTermData/NSF Analyses/NSFSocialNetwork/ObservationTimeFunctions.R')
-source("C:/Users/cecil/OneDrive/Desktop/SDC Work/Github Work/SeasonalNetworkAnalyses/createNetworkFunction.R")
-#source('G:/My Drive/Graduate School/Research/Projects/TemporalNets/SeasonalNetworkAnalyses/createNetworkFunction.R')
+source('G:/My Drive/Graduate School/Research/Projects/KMNPLongTermData/NSF Analyses/NSFSocialNetwork/ObservationTimeFunctions.R')
+source('G:/My Drive/Graduate School/Research/Projects/TemporalNets/SeasonalNetworkAnalyses/createNetworkFunction.R')
 
 socialDataRaw		<- read.csv('All_nonSuppStudent_Social_Data_through_2019_Francis duplicates deleted_Jul262021_ML_2021_11_10.csv', stringsAsFactors = FALSE)
 groups			<- read.csv('Compiled Group File with some data deleted for BL analysis_Nov 3 2021_ML Corrected11Nov2021.csv', stringsAsFactors = FALSE)
@@ -22,7 +19,6 @@ filemakerFocalList	<- read.csv('FileMakerIDs_ML_06Dec2021.csv', stringsAsFactors
 nn				<- read.csv('NearestNeighbor_TMM_ML_01Dec2021.csv', stringsAsFactors = FALSE)
 actv				<- read.csv('FocalActivity_TMM_ML_11Nov2021.csv', stringsAsFactors = FALSE)
 fm				<- read.csv('FileMaker_ML_01Dec2021.csv', stringsAsFactors = FALSE)
-
 
 demo				<- read.csv('Copy of life.history.TMM with becca comments about conflicting info Feb10_2021_ML.csv', stringsAsFactors = FALSE)
 demo$Name			<- str_to_title(demo$Name, locale = "en")
@@ -127,7 +123,7 @@ for (i in uniqueDates){
 ##################################################
 socialData$focalID		<- NA
 fullFocalList$adjStopTime	<- NA
-socialData$Start		<- as.POSIXlt(socialData$Start, format = "%H:%M:%S")
+socialData$Start			<- as.POSIXlt(socialData$Start, format = "%H:%M:%S")
 socialData$Stop			<- as.POSIXlt(socialData$Stop, format = "%H:%M:%S")
 fullFocalList$start_time	<- as.POSIXlt(fullFocalList$start_time, format = "%H:%M:%S")
 fullFocalList$stop_time		<- as.POSIXlt(fullFocalList$stop_time, format = "%H:%M:%S")
@@ -181,7 +177,7 @@ fullFocalList$stop_time		<- format(fullFocalList$stop_time, format = "%H:%M:%S")
 
 focalsNoSocialData		<- fullFocalList[!fullFocalList$focalid%in%unique(socialDataWithId$focalID),]
 
-summarizeNNFocals		<- aggregate(nn$yes_socialdata,by=list(focalid = nn$focalid, date = nn$date, group = nn$group, focal = nn$focal_animal), FUN = sum)
+summarizeNNFocals			<- aggregate(nn$yes_socialdata,by=list(focalid = nn$focalid, date = nn$date, group = nn$group, focal = nn$focal_animal), FUN = sum)
 trulyNoSocialDataNN		<- fullFocalList[fullFocalList$focalid %in% summarizeNNFocals[summarizeNNFocals$x == 0, "focalid"],]
 socialDataNeedsEnteringNN	<- fullFocalList[fullFocalList$focalid %in% summarizeNNFocals[summarizeNNFocals$x > 0, "focalid"],]
 
@@ -207,31 +203,26 @@ write.csv(socialDataScansNeedEntered, 'instantaneousDataMissingSocialEntered2021
 ### Generate network slices ###
 ###############################
 socialDataWithID	<- read.csv("allSocialDataWithFocalIDs.csv", stringsAsFactors = FALSE)
-focalListsBL	<- read.csv("focalListFinalForBLAnalysis2021-12-13.csv", stringsAsFactors = FALSE)
+focalListBL		<- read.csv("focalListFinalForBLAnalysis2021-12-13.csv", stringsAsFactors = FALSE)
 socialDataBL	<- read.csv("socialDataFinalForBLAnalysis2021-12-13.csv", stringsAsFactors = FALSE)
 
-#Need to change this to calculate full community every three months (look within group)
-#Do analyses averaging every three months for each group, then average across each group
-#Need to integrate the focal lists
-#Need to switch it to continuous data
-
 socialDataBL$season	<- ifelse(socialDataBL$monthNum <= 3, 'mating',
-				ifelse(socialDataBL$monthNum >= 4 & socialDataBL$month <= 6, 'gestation',
-				ifelse(socialDataBL$monthNum >= 7 & socialDataBL$month <= 9, 'birthing', 'lactation')))
-focalListsBL$monthNum	<-  as.numeric(data.frame(strsplit(focalListsBL$yearMonth, split = "-"))[2,])
-focalListsBL$year		<-  as.numeric(data.frame(strsplit(focalListsBL$yearMonth, split = "-"))[1,])
-focalListsBL$season	<- ifelse(focalListsBL$monthNum <= 3, 'mating',
-				ifelse(focalListsBL$monthNum >= 4 & focalListsBL$month <= 6, 'gestation',
-				ifelse(focalListsBL$monthNum >= 7 & focalListsBL$month <= 9, 'birthing', 'lactation')))
+					ifelse(socialDataBL$monthNum >= 4 & socialDataBL$month <= 6, 'gestation',
+					ifelse(socialDataBL$monthNum >= 7 & socialDataBL$month <= 9, 'birthing', 'lactation')))
+focalListBL$monthNum	<- as.numeric(t(data.frame(strsplit(focalListBL$yearMonth, split = "-"))[2,]))
+focalListBL$year		<- as.numeric(t(data.frame(strsplit(focalListBL$yearMonth, split = "-"))[1,]))
+focalListBL$season	<- ifelse(focalListBL$monthNum <= 3, 'mating',
+					ifelse(focalListBL$monthNum >= 4 & focalListBL$month <= 6, 'gestation',
+					ifelse(focalListBL$monthNum >= 7 & focalListBL$month <= 9, 'birthing', 'lactation')))
 socialDataBL$seasonID	<- factor(factor(socialDataBL$Year):factor(socialDataBL$season,levels=c("mating","gestation","birthing","lactation")))
-focalListsBL$seasonID	<- factor(factor(focalListsBL$year):factor(focalListsBL$season,levels=c("mating","gestation","birthing","lactation")))
+focalListBL$seasonID	<- factor(factor(focalListBL$year):factor(focalListBL$season,levels=c("mating","gestation","birthing","lactation")))
 
 #duration is in minutes
-focalListsBL$start_time 	<- as.POSIXlt(focalListsBL$start_time, format = "%H:%M:%S")
-focalListsBL$stop_time 		<- as.POSIXlt(focalListsBL$stop_time, format = "%H:%M:%S")
-focalListsBL$focal_duration	<- focalListsBL$stop_time - focalListsBL$start_time
+focalListBL$start_time 		<- as.POSIXlt(focalListBL$start_time, format = "%H:%M:%S")
+focalListBL$stop_time 		<- as.POSIXlt(focalListBL$stop_time, format = "%H:%M:%S")
+focalListBL$focal_duration	<- focalListBL$stop_time - focalListBL$start_time
 
-focalDurationPerSeason		<- aggregate(focalListsBL$focal_duration, by = list(focalListsBL$seasonID), FUN = sum)
+focalDurationPerSeason		<- aggregate(focalListBL$focal_duration, by = list(focalListBL$seasonID), FUN = sum)
 minimumTotalFocalDuration	<- 600
 enoughData				<- focalDurationPerSeason[focalDurationPerSeason$x>=minimumTotalFocalDuration,]
 
@@ -240,6 +231,11 @@ enoughData				<- focalDurationPerSeason[focalDurationPerSeason$x>=minimumTotalFo
 #####################################################################
 seasonIDs	<- enoughData[,1]
 grmNets	<- list()
+
+#Need to change this to calculate full community every three months (look within group)
+#Do analyses averaging every three months for each group, then average across each group
+#Need to integrate the focal lists
+#Need to switch it to continuous data
 
 populationNetworksAvgTime	<- function(socialData, focalList, groupsFile, seasonIDs, behav, behavColNum, netList){
 	for(i in 1:length(seasonIDs)){
@@ -270,12 +266,12 @@ populationNetworksAvgTime	<- function(socialData, focalList, groupsFile, seasonI
 			obsMat	<- calculateObservationMatrix(focalList, groupsFile, startDate, stopDate, animals)
 			behavMatAdj	<- behavMat/obsMat
 			netList[[i]]<- behavMatAdj
-			names(netList)[i]	<- seasonID_i
-			#currently naming list elements by number and not seasonID
+			names(netList)[i]	<- as.character(seasonID_i)
 		}
 	}
 	return(netList)
 }
+
 grmNets	<- populationNetworksAvgTime(socialDataBL, focalListsBL, groups, seasonIDs, "Groom", 17, grmNets)
 
 #################################################
