@@ -7,6 +7,7 @@ setwd('G:/My Drive/Graduate School/Research/Projects/KMNPLongTermData/NSF Analys
 library(stringr)
 library(lme4)
 library(lubridate)
+library(igraph)
 
 source('G:/My Drive/Graduate School/Research/Projects/KMNPLongTermData/NSF Analyses/NSFSocialNetwork/ObservationTimeFunctions.R')
 source('G:/My Drive/Graduate School/Research/Projects/TemporalNets/SeasonalNetworkAnalyses/createNetworkFunction.R')
@@ -19,11 +20,15 @@ filemakerFocalList	<- read.csv('FileMakerIDs_ML_06Dec2021.csv', stringsAsFactors
 nn				<- read.csv('NearestNeighbor_TMM_ML_01Dec2021.csv', stringsAsFactors = FALSE)
 actv				<- read.csv('FocalActivity_TMM_ML_11Nov2021.csv', stringsAsFactors = FALSE)
 fm				<- read.csv('FileMaker_ML_01Dec2021.csv', stringsAsFactors = FALSE)
+kinship			<- read.csv('Sifaka_relatedness_Kingroup_2015_12_01.csv')
 
 demo				<- read.csv('Copy of life.history.TMM with becca comments about conflicting info Feb10_2021_ML.csv', stringsAsFactors = FALSE)
 demo$Name			<- str_to_title(demo$Name, locale = "en")
 demo$Sex			<- ifelse(demo$Sex == '', 'unknown', as.character(demo$Sex))
 sifakaNames			<- demo$Name
+
+rownames(kinship)		<- kinship$X
+kinship			<- kinship[,c(2:76)]
 
 socialDataAllRaw		<- socialDataRaw[,c('OriginalFile', 'Observer', 'Obs.ID', 'Date', 'Month', 'Year', 'Focal', 'Start', 'Stop',
 					'Duration', 'Duration.Seconds', 'Initiator', 'Receiver', 'Context', 'Behavior', 'Species',
@@ -232,17 +237,14 @@ enoughData				<- focalDurationPerSeason[focalDurationPerSeason$x>=minimumTotalFo
 seasonIDs	<- enoughData[,1]
 grmNets	<- list()
 
-#Need to change this to calculate full community every three months (look within group)
-#Do analyses averaging every three months for each group, then average across each group
-#Need to integrate the focal lists
-#Need to switch it to continuous data
-
 populationNetworksAvgTime	<- function(socialData, focalList, groupsFile, seasonIDs, behav, behavColNum, netList){
 	for(i in 1:length(seasonIDs)){
 		seasonID_i	<- seasonIDs[i]
 		print(paste('Working on', seasonID_i))
+
 		data		<- socialData[as.character(socialData$seasonID) == as.character(seasonID_i) &
 					 socialData[, behavColNum] == behav,]
+
 		if(nrow(data)> 0 ){
 			focals	<- as.character(unique(data[,c('Focal')]))
 			init		<- as.character(unique(data[,c('Initiator')]))
@@ -269,10 +271,98 @@ populationNetworksAvgTime	<- function(socialData, focalList, groupsFile, seasonI
 			names(netList)[i]	<- as.character(seasonID_i)
 		}
 	}
+	netList	<- netList[which(!sapply(netList, is.null))]
 	return(netList)
 }
 
-grmNets	<- populationNetworksAvgTime(socialDataBL, focalListsBL, groups, seasonIDs, "Groom", 17, grmNets)
+grmNets	<- populationNetworksAvgTime(socialDataBL, focalListBL, groups, seasonIDs, "Groom", 17, grmNets)
+
+dyadID	<- function(animal1, animal2){
+	blank_IDs	<- rep(NA, length(animal1))
+	for(i in 1:length(animal1)){
+		ID	<- paste(sort(c(animal1[i], animal2[i]))[1], sort(c(animal1[i], animal2[i]))[2], sep = '')
+		blank_IDs[i]	<- ID
+	}
+	return(blank_IDs)
+}
+
+#Calculate the metrics for each net in list and then avg over time
+#Have demo file include just Name, Age, Sex
+#kinFile is a matrix of r values
+calculateMetricsCommunityAvgTime	<- function(netList, demoVar, demoFile, kinFile){
+	metricPerSlice		<- rep(NA, length(netList))
+	kinEdgeList			<- get.data.frame(graph.adjacency(as.matrix(kinFile), weighted = TRUE))
+	kinEdgeList$dyadID	<- dyadID(kinEdgeList$from, kinEdgeList$to)
+	kinEdgeList			<- kinEdgeList[!duplicated(kinEdgeList$dyadID) & is.na(kinEdgeList$weight) == FALSE,]
+	kinEdgeList$weight	<- abs(kinEdgeList$weight)
+	
+	for(i in 1:length(netList)){
+		print(paste('Working on network', i))
+		#print(netList[[i]])
+		edgeList			<- get.data.frame(graph.adjacency(netList[[i]], weighted = TRUE))
+		edgeListNoNA		<- edgeList[is.nan(edgeList$weight) == FALSE,]
+		
+		edgeListDemo1		<- merge(edgeListNoNA, demoFile, by.x = 'from', by.y = 'Name', all.x = TRUE)
+		colnames(edgeListDemo1)	<- c('from', 'to', 'weight', 'fromSex', 'fromBirthYear')
+		edgeListDemo2		<- merge(edgeListDemo1, demoFile, by.x = 'to', by.y = 'Name', all.x = TRUE)
+		colnames(edgeListDemo2)	<- c('to', 'from', 'edgeWeight', 'fromSex', 'fromBirthYear', 'toSex', 'toBirthYear')
+		edgeListDemo2$dyadID	<- dyadID(edgeListDemo2$from, edgeListDemo2$to)
+
+		edgeListDemo		<- merge(edgeListDemo2, kinEdgeList[,3:4], by.x = 'dyadID', by.y = 'dyadID', all.x = TRUE)
+		
+		edgeListDemo$sexCombo	<- dyadID(edgeListDemo$fromSex, edgeListDemo$toSex)
+		edgeListDemo$ageDiff	<- abs(as.numeric(edgeListDemo$fromBirthYear) - as.numeric(edgeListDemo$toBirthYear))
+		edgeListDemoSimp		<- edgeListDemo[,c(1, 9:11, 4)]
+		colnames(edgeListDemoSimp)	<- c('dyadID', 'kin', 'sexCombo', 'ageDiff', 'edgeWeight')
+		
+		edgeListDemoSimp[is.na(edgeListDemoSimp$ageDiff) == TRUE, 'ageDiff']	<- 'unk'
+		edgeListDemoSimp[is.na(edgeListDemoSimp$sexCombo) == TRUE, 'sexCombo']	<- 'unk'
+		edgeListDemoSimp[is.na(edgeListDemoSimp$kin) == TRUE, 'kin']		<- 'unk'
+
+		edgeListDemoDyadSum	<- aggregate(edgeListDemoSimp$edgeWeight, by = list(dyadID = edgeListDemoSimp$dyadID, 
+							sexCombo = edgeListDemoSimp$sexCombo, ageDiff = edgeListDemoSimp$ageDiff, kin = edgeListDemoSimp$kin), FUN = sum)
+		edgeListDemoDyadSum	<- edgeListDemoDyadSum[edgeListDemoDyadSum$x != Inf,]
+		#print(edgeListDemoDyadSum)
+
+		if(demoVar == 'age'){
+			edgeListDemoDyadSum	<- edgeListDemoDyadSum[edgeListDemoDyadSum$ageDiff != 'unk',]
+			model1	<- lm(x ~ ageDiff, data = edgeListDemoDyadSum)
+			metricPerSlice[i]	<- model1$coef[2]
+		}
+
+		if(demoVar == 'sex'){
+			edgeListDemoDyadSum	<- edgeListDemoDyadSum[edgeListDemoDyadSum$sexCombo != 'unk',]
+			edgeListDemoDyadSum$sexMatch	<- ifelse(edgeListDemoDyadSum$sexCombo == 'femalemale', 0, 1)
+			model2	<- lm(x ~ sexMatch, data = edgeListDemoDyadSum)
+			metricPerSlice[i]	<- model2$coef[2]
+		}
+
+		if(demoVar == 'kin'){
+			edgeListDemoDyadSum	<- edgeListDemoDyadSum[edgeListDemoDyadSum$kin != 'unk',]
+			edgeListDemoDyadSum$kin	<- as.numeric(edgeListDemoDyadSum$kin)
+			if(nrow(edgeListDemoDyadSum) > 0){
+				model3	<- lm(x ~ kin, data = edgeListDemoDyadSum)
+				metricPerSlice[i]	<- model3$coef[2]	
+			}
+		}
+		#print(metricPerSlice)
+	}
+	return(mean(metricPerSlice, na.rm = TRUE))
+}
+
+##Model demographic covar together?
+
+calculateMetricsCommunityAvgTime(grmNets, 'kin', demo[,c(1, 3, 5)], kinship)
+
+##do randomizations
+##run calculateMetricsCommunityAvgTime for real data
+##run calculateMetricsCommunityAvgTime for randomized
+##plot
+
+##################################################################
+### Calculate all time nets for each group then average groups ###
+##################################################################
+#Do analyses averaging every three months for each group, then average across group
 
 #################################################
 ### Calculate Edge Differentiability and plot ###
