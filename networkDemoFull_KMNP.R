@@ -2,15 +2,18 @@
 ##### Long term network demographics - KMNP #####
 #####      Last updated by ML 3/21/2021     #####
 #################################################
-setwd('G:/My Drive/Graduate School/Research/Projects/KMNPLongTermData/NSF Analyses')
+#setwd('G:/My Drive/Graduate School/Research/Projects/KMNPLongTermData/NSF Analyses')
+setwd('~/Downloads/Work')
 
 library(stringr)
 library(lme4)
 library(lubridate)
 library(igraph)
 
-source('G:/My Drive/Graduate School/Research/Projects/KMNPLongTermData/NSF Analyses/NSFSocialNetwork/ObservationTimeFunctions.R')
-source('G:/My Drive/Graduate School/Research/Projects/TemporalNets/SeasonalNetworkAnalyses/createNetworkFunction.R')
+#source('G:/My Drive/Graduate School/Research/Projects/KMNPLongTermData/NSF Analyses/NSFSocialNetwork/ObservationTimeFunctions.R')
+#source('G:/My Drive/Graduate School/Research/Projects/TemporalNets/SeasonalNetworkAnalyses/createNetworkFunction.R')
+source('~/Downloads/Work/NSFSocialNetwork/ObservationTimeFunctions.R', chdir = TRUE)
+source('~/Downloads/Work/SeasonalNetworkAnalyses/createNetworkFunction.R', chdir = TRUE)
 
 socialDataRaw		<- read.csv('All_nonSuppStudent_Social_Data_through_2019_Francis duplicates deleted_Jul262021_ML_2021_11_10.csv', stringsAsFactors = FALSE)
 groups			<- read.csv('Compiled Group File with some data deleted for BL analysis_Nov 3 2021_ML Corrected11Nov2021.csv', stringsAsFactors = FALSE)
