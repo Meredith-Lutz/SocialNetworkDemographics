@@ -9,6 +9,7 @@ library(stringr)
 library(lme4)
 library(lubridate)
 library(igraph)
+library(ANTs)
 
 #source('G:/My Drive/Graduate School/Research/Projects/KMNPLongTermData/NSF Analyses/NSFSocialNetwork/ObservationTimeFunctions.R')
 #source('G:/My Drive/Graduate School/Research/Projects/TemporalNets/SeasonalNetworkAnalyses/createNetworkFunction.R')
@@ -358,6 +359,12 @@ calculateMetricsCommunityAvgTime	<- function(netList, demoVar, demoFile, kinFile
 calculateMetricsCommunityAvgTime(grmNets, 'kin', demo[,c(1, 3, 5)], kinship)
 
 ##do randomizations
+##needs to run on focal data instead of summarized matrix
+##df is a data frame with actor, receip, focalID, weight
+##alter is a receip
+##ctrl = c(column name for focal ID, column name for focal indvidual)
+##use stat.glmm to run analysis
+##these functions only run on unweighted data
 ##run calculateMetricsCommunityAvgTime for real data
 ##run calculateMetricsCommunityAvgTime for randomized
 ##plot
