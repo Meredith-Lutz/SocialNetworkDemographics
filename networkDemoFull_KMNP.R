@@ -1,9 +1,8 @@
 #################################################
 ##### Long term network demographics - KMNP #####
-#####      Last updated by ML 3/21/2021     #####
+#####      Last updated by ML 6/20/2022     #####
 #################################################
-#setwd('G:/My Drive/Graduate School/Research/Projects/KMNPLongTermData/NSF Analyses')
-setwd('~/Downloads/Work')
+setwd('G:/My Drive/Graduate School/Research/Projects/KMNPLongTermData/NSF Analyses')
 
 library(stringr)
 library(lme4)
@@ -11,13 +10,11 @@ library(lubridate)
 library(igraph)
 library(ANTs)
 
-#source('G:/My Drive/Graduate School/Research/Projects/KMNPLongTermData/NSF Analyses/NSFSocialNetwork/ObservationTimeFunctions.R')
-#source('G:/My Drive/Graduate School/Research/Projects/TemporalNets/SeasonalNetworkAnalyses/createNetworkFunction.R')
-source('~/Downloads/Work/NSFSocialNetwork/ObservationTimeFunctions.R', chdir = TRUE)
-source('~/Downloads/Work/SeasonalNetworkAnalyses/createNetworkFunction.R', chdir = TRUE)
+source('G:/My Drive/Graduate School/Research/Projects/KMNPLongTermData/NSF Analyses/NSFSocialNetwork/ObservationTimeFunctions.R')
+source('G:/My Drive/Graduate School/Research/Projects/TemporalNets/SeasonalNetworkAnalyses/createNetworkFunction.R')
 
-socialDataRaw		<- read.csv('All_nonSuppStudent_Social_Data_through_2019_Francis duplicates deleted_Jul262021_ML_2021_11_10.csv', stringsAsFactors = FALSE)
-groups			<- read.csv('Compiled Group File with some data deleted for BL analysis_Nov 3 2021_ML Corrected11Nov2021.csv', stringsAsFactors = FALSE)
+socialDataRaw		<- read.csv('All_nonSuppStudent_Social_Data_through_2019_2022_06_09_MLWithFocalID.csv', stringsAsFactors = FALSE)
+groups			<- read.csv('Compiled Group File with some data deleted for BL analysis_Nov 3 2021_ML Corrected11Nov2021_NoBlanks.csv', stringsAsFactors = FALSE)
 nnFocalList			<- read.csv('NearestNeighborIDs_TMM_ML_01Dec2021.csv', stringsAsFactors = FALSE)
 actvFocalList		<- read.csv('FocalActivityIDs_TMM_ML_01Dec2021.csv', stringsAsFactors = FALSE)
 filemakerFocalList	<- read.csv('FileMakerIDs_ML_06Dec2021.csv', stringsAsFactors = FALSE)
@@ -31,12 +28,13 @@ demo$Name			<- str_to_title(demo$Name, locale = "en")
 demo$Sex			<- ifelse(demo$Sex == '', 'unknown', as.character(demo$Sex))
 sifakaNames			<- demo$Name
 
-rownames(kinship)		<- kinship$X
 kinship			<- kinship[,c(2:76)]
+colnames(kinship)[29]	<- 'Camilla'
+rownames(kinship)		<- colnames(kinship)
 
 socialDataAllRaw		<- socialDataRaw[,c('OriginalFile', 'Observer', 'Obs.ID', 'Date', 'Month', 'Year', 'Focal', 'Start', 'Stop',
 					'Duration', 'Duration.Seconds', 'Initiator', 'Receiver', 'Context', 'Behavior', 'Species',
-					'Tree.number', 'Response', 'To', 'Win', 'Comments', 'Cleaning.Comments', 'StudentOb.YN')]
+					'Tree.number', 'Response', 'To', 'Win', 'Comments', 'Cleaning.Comments', 'StudentOb.YN', 'focalID')]
 
 # Change baby names to match LH file
 socialDataAllRaw$Initiator	<- gsub('Vanilla_baby_2011', 'Vanillababy2011', socialDataAllRaw$Initiator)
@@ -49,7 +47,7 @@ socialData		<- socialDataAllRaw[socialDataAllRaw$Initiator %in% sifakaNames & so
 socialDataRemoved	<- socialDataAllRaw[!(socialDataAllRaw$Initiator %in% sifakaNames & socialDataAllRaw$Receiver %in% sifakaNames),]
 
 #Merging groupNames back onto socialData
-socialData	<- merge(socialDataRaw,groups[,1:3], by.x = c("Date", "Focal"),by.y = c("date", "animal"), all.x = TRUE)
+socialData	<- merge(socialData, groups[,1:3], by.x = c("Date", "Focal"),by.y = c("date", "animal"), all.x = TRUE)
 
 socialData$monthNum	<- ifelse(socialData$Month == 'Jan', '01', 
 					ifelse(socialData$Month == 'Feb', '02',
@@ -64,6 +62,9 @@ socialData$monthNum	<- ifelse(socialData$Month == 'Jan', '01',
 					ifelse(socialData$Month == 'Nov', '11', '12')))))))))))
 socialData$yearMonth	<- paste(socialData$Year, socialData$monthNum, sep = '-')
 
+#Remove ad-lib/all occurances lines
+socialData	<- socialData[socialData$Receiver == socialData$Focal | socialData$Initiator == socialData$Focal,]
+
 ######################################################
 ### Combine Focal Lists and Create Observation MAT ###
 ######################################################
@@ -71,47 +72,60 @@ fullFocalList	<- rbind.data.frame(filemakerFocalList, nnFocalList, actvFocalList
 fullFocalList	<- fullFocalList[order(fullFocalList$date, fullFocalList$start_time),]
 fullFocalList$yearMonth	<- substr(fullFocalList$date,1,7)
 
+socialDataFullFocalList	<- socialData[socialData$focalID %in% fullFocalList$focalid,]
+
+focalsNoSocialData		<- fullFocalList[!(fullFocalList$focalid %in% unique(socialDataFullFocalList$focalID)),]
+summarizeNNFocals			<- aggregate(nn$yes_socialdata, by = list(focalid = nn$focalid, date = nn$date, group = nn$group, focal = nn$focal_animal), FUN = sum, na.rm = TRUE)
+trulyNoSocialDataNN		<- fullFocalList[fullFocalList$focalid %in% summarizeNNFocals[summarizeNNFocals$x == 0, "focalid"],]
+summarizeActvFocals		<- aggregate(actv$yes_socialdata, by = list(focalid = actv$focalid, date = actv$date, group = actv$group, focal = actv$focal_animal), FUN = sum)
+trulyNoSocialDataActv		<- fullFocalList[fullFocalList$focalid %in% summarizeActvFocals[summarizeActvFocals$x == 0, "focalid"],]
+fileMakerTrulyNoSocialData	<- focalsNoSocialData[focalsNoSocialData$date < "2013-06-01",]
+
+focalsWithSocialDataOrTrulyNone	<- rbind.data.frame(fullFocalList[fullFocalList$focalid %in% unique(socialDataFullFocalList$focalID), ], 
+							trulyNoSocialDataActv, trulyNoSocialDataNN, fileMakerTrulyNoSocialData)
+
+
 #Pick focals so that they aren't overlapping
-uniqueDates	<- unique(fullFocalList$date)
+uniqueDates	<- unique(focalsWithSocialDataOrTrulyNone$date)
 fullFocalListNonOverlapping	<- data.frame()
-for (i in uniqueDates){
+for(i in uniqueDates){
 	print(i)
-	groupsObserved	<- unique(fullFocalList[fullFocalList$date == i,"group"])
-	for (j in groupsObserved){
+	groupsObserved	<- unique(focalsWithSocialDataOrTrulyNone[focalsWithSocialDataOrTrulyNone$date == i,"group"])
+	for(j in groupsObserved){
 		print(j)
-		subset	<- fullFocalList[fullFocalList$group == j & fullFocalList$date == i,]
+		subset	<- focalsWithSocialDataOrTrulyNone[focalsWithSocialDataOrTrulyNone$group == j & focalsWithSocialDataOrTrulyNone$date == i,]
 		#print(dim(subset))
 		subset$start_time 	<- as.POSIXlt(subset$start_time, format = "%H:%M:%S")
-		subset$stop_time 	<- as.POSIXlt(subset$stop_time, format = "%H:%M:%S")
-		subset	<- subset[order(subset$start_time),]
-		if (dim(subset)[1] >= 2){
-			for (k in 1:(dim(subset)[1]-1)){
-				for (m in (k+1):(dim(subset)[1])){
+		subset$stop_time 		<- as.POSIXlt(subset$stop_time, format = "%H:%M:%S")
+		subset			<- subset[order(subset$start_time),]
+		if(dim(subset)[1] >= 2){
+			for(k in 1:(dim(subset)[1] - 1)){
+				for(m in (k+1):(dim(subset)[1])){
 					#print(k)
 					#print(m)
 					#print(dim(subset))
-					focal1	<- interval(start = subset[k,"start_time"],end = subset[k,"stop_time"])
-					focal2	<- interval(start = subset[m,"start_time"],end = subset[m,"stop_time"])
-					if (is.na(focal1)==FALSE & is.na(focal2)==FALSE){
-						if (int_overlaps(focal1,focal2)){
-							observers	<- unique(subset[c(k,m),"observer"])
-							overlappingFocals	<- subset[c(k,m),]
+					focal1	<- interval(start = subset[k,"start_time"], end = subset[k,"stop_time"])
+					focal2	<- interval(start = subset[m,"start_time"], end = subset[m,"stop_time"])
+					if(is.na(focal1)== FALSE & is.na(focal2) == FALSE){
+						if(int_overlaps(focal1,focal2)){
+							observers		<- unique(subset[c(k, m), "observer"])
+							overlappingFocals	<- subset[c(k, m),]
 							if (length(observers) > 1){
 								observer1		<- observers[1]
-								observerToKeep	<- ifelse(observer1 == "Becca","Becca",
-												ifelse(observer1 == "Meredith","Meredith",
+								observerToKeep	<- ifelse(observer1 == "Becca", "Becca",
+												ifelse(observer1 == "Meredith", "Meredith",
 												ifelse(observer1 == "Max", "Max",
-												ifelse(observer1 == "Max and Becca","Max and Becca",
-												ifelse(observer1 == "Patrick","Patrick", 
-								          			ifelse(observer1 == "Andry","Andry", 
-												ifelse(observer1 == "Daniel","Daniel", 
-												ifelse(observer1 == "Dessy","Dessy", 
-												ifelse(observer1 == "Francis","Francis", 
-												ifelse(observer1 == "Laura","Laura", 
-												ifelse(observer1 == "Mampionona","Mampionona", 
-												ifelse(observer1 == "Elvis","Elvis", "Felana"
+												ifelse(observer1 == "Max and Becca", "Max and Becca",
+												ifelse(observer1 == "Patrick", "Patrick", 
+								          			ifelse(observer1 == "Andry", "Andry", 
+												ifelse(observer1 == "Daniel", "Daniel", 
+												ifelse(observer1 == "Dessy", "Dessy", 
+												ifelse(observer1 == "Francis", "Francis", 
+												ifelse(observer1 == "Laura", "Laura", 
+												ifelse(observer1 == "Mampionona", "Mampionona", 
+												ifelse(observer1 == "Elvis", "Elvis", "Felana"
 												))))))))))))
-								idToRemove	<- overlappingFocals[overlappingFocals$observer != observerToKeep,"focalid"]
+								idToRemove	<- overlappingFocals[overlappingFocals$observer != observerToKeep, "focalid"]
 								subset	<- subset[subset$focalid != idToRemove,]
 							}
 						}
@@ -126,38 +140,39 @@ for (i in uniqueDates){
 	}
 }
 
+socialDataMatching	<- socialData[socialData$focalID %in% fullFocalListNonOverlapping$focalid,]
+focalListMatching		<- fullFocalListNonOverlapping[fullFocalListNonOverlapping$yearMonth <= '2019-12',]
+
 ###############################
 ### Generate network slices ###
 ###############################
-socialDataWithID	<- read.csv("allSocialDataWithFocalIDs.csv", stringsAsFactors = FALSE)
-focalListBL		<- read.csv("focalListFinalForBLAnalysis2021-12-13.csv", stringsAsFactors = FALSE)
-socialDataBL	<- read.csv("socialDataFinalForBLAnalysis2021-12-13.csv", stringsAsFactors = FALSE)
-
-socialDataBL$season	<- ifelse(socialDataBL$monthNum <= 3, 'mating',
-					ifelse(socialDataBL$monthNum >= 4 & socialDataBL$month <= 6, 'gestation',
-					ifelse(socialDataBL$monthNum >= 7 & socialDataBL$month <= 9, 'birthing', 'lactation')))
-focalListBL$monthNum	<- as.numeric(t(data.frame(strsplit(focalListBL$yearMonth, split = "-"))[2,]))
-focalListBL$year		<- as.numeric(t(data.frame(strsplit(focalListBL$yearMonth, split = "-"))[1,]))
-focalListBL$season	<- ifelse(focalListBL$monthNum <= 3, 'mating',
-					ifelse(focalListBL$monthNum >= 4 & focalListBL$month <= 6, 'gestation',
-					ifelse(focalListBL$monthNum >= 7 & focalListBL$month <= 9, 'birthing', 'lactation')))
-socialDataBL$seasonID	<- factor(factor(socialDataBL$Year):factor(socialDataBL$season,levels=c("mating","gestation","birthing","lactation")))
-focalListBL$seasonID	<- factor(factor(focalListBL$year):factor(focalListBL$season,levels=c("mating","gestation","birthing","lactation")))
+socialDataMatching$season	<- ifelse(socialDataMatching$monthNum <= 3, 'mating',
+					ifelse(socialDataMatching$monthNum >= 4 & socialDataMatching$month <= 6, 'gestation',
+					ifelse(socialDataMatching$monthNum >= 7 & socialDataMatching$month <= 9, 'birthing', 'lactation')))
+focalListMatching$monthNum	<- as.numeric(t(data.frame(strsplit(focalListMatching$yearMonth, split = "-"))[2,]))
+focalListMatching$year		<- as.numeric(t(data.frame(strsplit(focalListMatching$yearMonth, split = "-"))[1,]))
+focalListMatching$season	<- ifelse(focalListMatching$monthNum <= 3, 'mating',
+					ifelse(focalListMatching$monthNum >= 4 & focalListMatching$month <= 6, 'gestation',
+					ifelse(focalListMatching$monthNum >= 7 & focalListMatching$month <= 9, 'birthing', 'lactation')))
+socialDataMatching$seasonID	<- factor(factor(socialDataMatching$Year):factor(socialDataMatching$season, levels = c("mating", "gestation", "birthing", "lactation")))
+focalListMatching$seasonID	<- factor(factor(focalListMatching$year):factor(focalListMatching$season, levels = c("mating", "gestation", "birthing", "lactation")))
 
 #duration is in minutes
-focalListBL$start_time 		<- as.POSIXlt(focalListBL$start_time, format = "%H:%M:%S")
-focalListBL$stop_time 		<- as.POSIXlt(focalListBL$stop_time, format = "%H:%M:%S")
-focalListBL$focal_duration	<- focalListBL$stop_time - focalListBL$start_time
+focalListMatching$start_time 		<- as.POSIXlt(focalListMatching$start_time, format = "%H:%M:%S")
+focalListMatching$stop_time 		<- as.POSIXlt(focalListMatching$stop_time, format = "%H:%M:%S")
+focalListMatching$focal_duration	<- focalListMatching$stop_time - focalListMatching$start_time
 
-focalDurationPerSeason		<- aggregate(focalListBL$focal_duration, by = list(focalListBL$seasonID), FUN = sum)
+focalDurationPerSeason		<- aggregate(focalListMatching$focal_duration, by = list(focalListMatching$seasonID), FUN = sum)
 minimumTotalFocalDuration	<- 600
 enoughData				<- focalDurationPerSeason[focalDurationPerSeason$x>=minimumTotalFocalDuration,]
 
-#####################################################################
-### Calculate three month networks across population average time ###
-#####################################################################
+##########################################################################
+### Calculate three month networks across population then average time ###
+##########################################################################
+#First split into seasons, then calculate net for whole community
+#Calculate metrics per season, average seasons
+
 seasonIDs	<- enoughData[,1]
-grmNets	<- list()
 
 populationNetworksAvgTime	<- function(socialData, focalList, groupsFile, seasonIDs, behav, behavColNum, netList){
 	for(i in 1:length(seasonIDs)){
@@ -167,7 +182,7 @@ populationNetworksAvgTime	<- function(socialData, focalList, groupsFile, seasonI
 		data		<- socialData[as.character(socialData$seasonID) == as.character(seasonID_i) &
 					 socialData[, behavColNum] == behav,]
 
-		if(nrow(data)> 0 ){
+		if(nrow(data)> 0){
 			focals	<- as.character(unique(data[,c('Focal')]))
 			init		<- as.character(unique(data[,c('Initiator')]))
 			recip		<- as.character(unique(data[,c('Receiver')]))
@@ -197,8 +212,6 @@ populationNetworksAvgTime	<- function(socialData, focalList, groupsFile, seasonI
 	return(netList)
 }
 
-grmNets	<- populationNetworksAvgTime(socialDataBL, focalListBL, groups, seasonIDs, "Groom", 17, grmNets)
-
 dyadID	<- function(animal1, animal2){
 	blank_IDs	<- rep(NA, length(animal1))
 	for(i in 1:length(animal1)){
@@ -209,10 +222,11 @@ dyadID	<- function(animal1, animal2){
 }
 
 #Calculate the metrics for each net in list and then avg over time
-#Have demo file include just Name, Age, Sex
-#kinFile is a matrix of r values
-calculateMetricsCommunityAvgTime	<- function(netList, demoVar, demoFile, kinFile){
-	metricPerSlice		<- rep(NA, length(netList))
+
+##Need to model all demo together
+##Need to use asnipe to do mqrap
+calculateMetricsCommunityAvgTime	<- function(netList, demoFile, kinFile){
+	metricPerSlice		<- cbind.data.frame(rep(NA, length(netList)), 3)
 	kinEdgeList			<- get.data.frame(graph.adjacency(as.matrix(kinFile), weighted = TRUE))
 	kinEdgeList$dyadID	<- dyadID(kinEdgeList$from, kinEdgeList$to)
 	kinEdgeList			<- kinEdgeList[!duplicated(kinEdgeList$dyadID) & is.na(kinEdgeList$weight) == FALSE,]
@@ -244,129 +258,35 @@ calculateMetricsCommunityAvgTime	<- function(netList, demoVar, demoFile, kinFile
 		edgeListDemoDyadSum	<- aggregate(edgeListDemoSimp$edgeWeight, by = list(dyadID = edgeListDemoSimp$dyadID, 
 							sexCombo = edgeListDemoSimp$sexCombo, ageDiff = edgeListDemoSimp$ageDiff, kin = edgeListDemoSimp$kin), FUN = sum)
 		edgeListDemoDyadSum	<- edgeListDemoDyadSum[edgeListDemoDyadSum$x != Inf,]
+		edgeListDemoDyadSum$sexMatch	<- ifelse(edgeListDemoDyadSum$sexCombo == 'femalemale', 0, 1)
+
 		#print(edgeListDemoDyadSum)
 
-		if(demoVar == 'age'){
-			edgeListDemoDyadSum	<- edgeListDemoDyadSum[edgeListDemoDyadSum$ageDiff != 'unk',]
-			model1	<- lm(x ~ ageDiff, data = edgeListDemoDyadSum)
-			metricPerSlice[i]	<- model1$coef[2]
-		}
+		model1	<- lm(x ~ ageDiff, data = edgeListDemoDyadSum)
+		metricPerSlice[i, 1]	<- model1$coef[2] #age
+		metricPerSlice[i, 1]	<- model1$coef[2] #sex
+		metricPerSlice[i, 1]	<- model1$coef[2] #kinship
 
-		if(demoVar == 'sex'){
-			edgeListDemoDyadSum	<- edgeListDemoDyadSum[edgeListDemoDyadSum$sexCombo != 'unk',]
-			edgeListDemoDyadSum$sexMatch	<- ifelse(edgeListDemoDyadSum$sexCombo == 'femalemale', 0, 1)
-			model2	<- lm(x ~ sexMatch, data = edgeListDemoDyadSum)
-			metricPerSlice[i]	<- model2$coef[2]
-		}
-
-		if(demoVar == 'kin'){
-			edgeListDemoDyadSum	<- edgeListDemoDyadSum[edgeListDemoDyadSum$kin != 'unk',]
-			edgeListDemoDyadSum$kin	<- as.numeric(edgeListDemoDyadSum$kin)
-			if(nrow(edgeListDemoDyadSum) > 0){
-				model3	<- lm(x ~ kin, data = edgeListDemoDyadSum)
-				metricPerSlice[i]	<- model3$coef[2]	
-			}
-		}
 		#print(metricPerSlice)
 	}
-	return(mean(metricPerSlice, na.rm = TRUE))
+	colnames(metricPerSlice)	<- c('ageCoef', 'sexCoef', 'kinCoef')
+	return(apply(metricPerSlice, 2, mean, na.rm = TRUE))
 }
 
-##Model demographic covar together?
-
-calculateMetricsCommunityAvgTime(grmNets, 'kin', demo[,c(1, 3, 5)], kinship)
-
-##do randomizations
-##needs to run on focal data instead of summarized matrix
-##df is a data frame with actor, receip, focalID, weight
-##alter is a receip
-##ctrl = c(column name for focal ID, column name for focal indvidual)
-##use stat.glmm to run analysis
-##these functions only run on unweighted data
-##run calculateMetricsCommunityAvgTime for real data
-##run calculateMetricsCommunityAvgTime for randomized
-##plot
-
-
-# Control factor are individual focals
-# Dataframe needs actor receipient focal Id in duration
-# Scan is a variable relating to each focal that you want to constrain swaps w/in
-# For example, morning focals only swapping with morning focals
-# Focal and alters are actor and receipient
-
-# Adapted from Reggie's data stream randomization code
-dataStreamRandomizationsValued <- function(socialData, subjects, obsmat, n.rand = 1000) {
-
-	data.rand <- socialData
-	data.rand$index <- 1:nrow(data.rand)
-
-	socmat.rand <- array(NA, c(n.rand, nrow(obsmat), ncol(obsmat)))
-	
-	for (i in 1:n.rand) {
-
-		repeat {
-			# select two observations from the same date
-			a <- sample(data.rand$index, 1)
-			data.rand.tmp <- data.rand[which(data.rand$index != data.rand$index[a]),,drop = FALSE]
-			
-			# if there are further observations on this date
-			if (nrow(data.rand.tmp[which(data.rand.tmp$Date == data.rand$Date[a]),]) > 0) {
-				b <- sample(data.rand.tmp$index[which(data.rand.tmp$Date == data.rand$Date[a])],1)
-
-				# check that these represent 4 unique individuals
-				rows <- which(data.rand$index %in% c(a,b))
-				if (length(unique(c(data.rand$Actor[rows], data.rand$Subject[rows]))) == 4) {
-				
-					# Extract which ones aren't a focal (if neither, select one at random)
-					inds.a <- c(data.rand$Actor[rows[1], data.rand$Subject[rows[1]])
-					i.a <- which(!(inds.a %in% data.rand$FocalAnimal[rows[1]]))
-					if (length(i.a) > 1) {
-						i.a <- sample(i.a, 1)
-					}
-					inds.b <- c(data.rand$Actor[rows[2]], data.rand$Subject[rows[2]])
-					i.b <- which(!(inds.b %in% data.rand$FocalAnimal[rows[2]]))
-					if (length(i.b) > 1) {
-						i.b <- sample(i.b,1)
-					}
-
-					# Then swap them in
-					data.rand[rows[1],c("Actor","Subject")][i.a] <- inds.b[i.b]
-					data.rand[rows[1],c("Actor","Subject")][i.b] <- inds.a[i.a]
-
-					# then break out of this loop
-					break();
-				}
-			}
-		}
-		
-		# recalculate network
-		######### fix this
-		socmat.rand[i,,] <- populationNetworksAvgTime(data.rand, subjects, obsmat)
-	}
-
-	return(socmat.rand)
-}
-
-
-# Calculate real network
-realNetwork		<- 
+grmNets			<- list()
+grmNets			<- populationNetworksAvgTime(socialDataBL, focalListBL, groups, seasonIDs, "Groom", 17, grmNets)
+realGrmNetAvgAcrossTime	<- lapply(grmNets, mean) 
 
 # Calculate dyadic effects
-# Replcae the section with cacluateCommunityMetricsAvgTime
-# Use asnipe to do mrqap (adjust in cacluateCommunityMetricsAvgTime function)
-realNetModel 	<- mrqap.dsp(realNetwork ~ kinship.matrix, randomisations = n.perm2)
+obsMetricsGrm	<- calculateMetricsCommunityAvgTime(grmNets, 'kin', demo[,c(1, 3, 5)], kinship)
 coef.trait 		<- realNetModel$coefficients[2]
-p.node 			<- realNetModel$P.greater[2]
-
-# get t.statistic
-realNetModel2 	<- mrqap.dsp(realNetwork ~ kinship.matrix, randomisations = 1)
-t.trait			<- realNetModel2$test.statistic[2]
+t.trait		<- realNetModel2$test.statistic[2]
+p.node 		<- realNetModel$P.greater[2]
 
 # Calculate data stream permutations for first step of double permutations
-networksRand <- dataStreamRandomizationsValued(socialData, subjects, obsmat, n.rand = 1000)
- 
+networksRand 	<- dataStreamRandomizationsValued(socialData, subjects, obsmat, n.rand = 1000)
+
 # coefficients based on data stream permutations
-# Need dyadic covariate matrix (i.e. kinship.matrix)
 out <- apply(networksRand, 1, function(x) { 
 		model <- mrqap.dsp(x ~ kinship.matrix, randomisations = 1); 
 		return(c(model$coefficients[2], model$test.statistic[2])) 
@@ -387,7 +307,6 @@ network_controlled 	<- realNetwork - network_median
 controlledNetModel 	<- mrqap.dsp(network_controlled ~ kinship.matrix, randomisations = n.perm2)
 coef.controlled	 	<- controlledNetModel$coefficients[2]
 p.node.control	 	<- controlledNetModel$P.greater[2]
-
 
 ##################################################################
 ### Calculate all time nets for each group then average groups ###
