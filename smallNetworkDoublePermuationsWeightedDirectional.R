@@ -11,7 +11,7 @@ preNetworkWeightedDirectionalRandomization	<- function(data){
 	focals	<- unique(data$focalID)
 	temp		<- data.frame()
 	for(i in focals){
-		print(paste('Working on focal', i))
+		print(paste('Working on randomizing focal', i))
 		subset	<- data[data$focalID == i,]
 		nPartners	<- nrow(subset)
 		partners	<- unique(subset$partner)
@@ -25,8 +25,6 @@ preNetworkWeightedDirectionalRandomization	<- function(data){
 		}
 		temp	<- rbind.data.frame(temp, subset)
 	}
-	colnames(temp)	<- c('focalID', 'focal_individual_id', 'partner', 'in', 'out')
+	colnames(temp)	<- c('focalID', 'focal_individual_id', 'partner', 'in', 'out', 'group')
 	return(temp)
 }
-
-preNetworkWeightedDirectionalRandomization(test)

@@ -8,10 +8,9 @@ library(stringr)
 library(lme4)
 library(lubridate)
 library(igraph)
-library(ANTs)
+library(asnipe)
 
 source('G:/My Drive/Graduate School/Research/Projects/KMNPLongTermData/NSF Analyses/NSFSocialNetwork/ObservationTimeFunctions.R')
-source('G:/My Drive/Graduate School/Research/Projects/TemporalNets/SeasonalNetworkAnalyses/createNetworkFunction.R')
 
 socialDataRaw		<- read.csv('All_nonSuppStudent_Social_Data_through_2019_2022_06_09_MLWithFocalID.csv', stringsAsFactors = FALSE)
 groups			<- read.csv('Compiled Group File with some data deleted for BL analysis_Nov 3 2021_ML Corrected11Nov2021_NoBlanks.csv', stringsAsFactors = FALSE)
@@ -27,10 +26,15 @@ demo				<- read.csv('Copy of life.history.TMM with becca comments about conflict
 demo$Name			<- str_to_title(demo$Name, locale = "en")
 demo$Sex			<- ifelse(demo$Sex == '', 'unknown', as.character(demo$Sex))
 sifakaNames			<- demo$Name
+demo[demo$Name == 'Barea', 'Birth.Year']	<- ''
+demo[demo$Sex == '', 'Sex']	<- NA
+demo[demo$Sex == 'unknown', 'Sex']	<- NA
+demo[demo$Birth.Year == '', 'Birth.Year']	<- NA
 
 kinship			<- kinship[,c(2:76)]
 colnames(kinship)[29]	<- 'Camilla'
 rownames(kinship)		<- colnames(kinship)
+kinship			<- as.matrix(kinship)
 
 socialDataAllRaw		<- socialDataRaw[,c('OriginalFile', 'Observer', 'Obs.ID', 'Date', 'Month', 'Year', 'Focal', 'Start', 'Stop',
 					'Duration', 'Duration.Seconds', 'Initiator', 'Receiver', 'Context', 'Behavior', 'Species',
@@ -46,8 +50,23 @@ socialDataAllRaw$Receiver	<- gsub('Savannah_baby_2011', 'Savannahbaby2011', soci
 socialData		<- socialDataAllRaw[socialDataAllRaw$Initiator %in% sifakaNames & socialDataAllRaw$Receiver %in% sifakaNames,]
 socialDataRemoved	<- socialDataAllRaw[!(socialDataAllRaw$Initiator %in% sifakaNames & socialDataAllRaw$Receiver %in% sifakaNames),]
 
+#Visits
+groups$visit	<- 'N'
+groups[groups$animal == 'Spirit' & groups$date == '2019-02-01' & groups$group == 'IV', 'visit']	<- 'Y'
+groups[groups$animal == 'William' & groups$date == '2019-02-01' & groups$group == 'IV', 'visit']	<- 'Y'
+groups[groups$animal == 'Spirit' & groups$date == '2019-02-04' & groups$group == 'XI', 'visit']	<- 'Y'
+groups[groups$animal == 'Zavona' & groups$date == '2019-02-04' & groups$group == 'XI', 'visit']	<- 'Y'
+groups[groups$animal == 'Spirit' & groups$date == '2019-03-10' & groups$group == 'XI', 'visit']	<- 'Y'
+groups[groups$animal == 'Zavona' & groups$date == '2019-03-10' & groups$group == 'XI', 'visit']	<- 'Y'
+groups[groups$animal == 'Valdes' & groups$date == '2017-10-16' & groups$group == 'III', 'visit']	<- 'Y'
+groups[groups$animal == 'Zoma' & groups$date == '2018-06-02' & groups$group == 'II', 'visit']	<- 'Y'
+groups[groups$animal == 'Spirit' & groups$date == '2019-07-26' & groups$group == 'III', 'visit']	<- 'Y'
+groups[groups$animal == 'Spirit' & groups$date == '2019-08-11' & groups$group == 'Solitary', 'visit']	<- 'Y'
+groups[groups$animal == 'Zavona' & groups$date == '2019-09-23' & groups$group == 'III', 'visit']	<- 'Y'
+groupsNoVisits	<- groups[groups$visit == 'N',]
+
 #Merging groupNames back onto socialData
-socialData	<- merge(socialData, groups[,1:3], by.x = c("Date", "Focal"),by.y = c("date", "animal"), all.x = TRUE)
+socialData	<- merge(socialData, groupsNoVisits[,1:3], by.x = c("Date", "Focal"),by.y = c("date", "animal"), all.x = TRUE)
 
 socialData$monthNum	<- ifelse(socialData$Month == 'Jan', '01', 
 					ifelse(socialData$Month == 'Feb', '02',
@@ -188,56 +207,118 @@ gp6FocalList	<- focalListMatching[focalListMatching$group == 'VI' & focalListMat
 socialDataExample	<- rbind.data.frame(gp4SocialData, gp12SocialData, gp6SocialData)
 focalListExample	<- rbind.data.frame(gp4FocalList, gp12FocalList, gp6FocalList)
 
-write.csv(socialDataExample, 'exampleSocialData.csv', row.names = FALSE)
-write.csv(focalListExample, 'exampleFocalList.csv', row.names = FALSE)
+#write.csv(socialDataExample, 'exampleSocialData.csv', row.names = FALSE)
+#write.csv(focalListExample, 'exampleFocalList.csv', row.names = FALSE)
 
 
-##########################################################################
-### Calculate three month networks across population then average time ###
-##########################################################################
-#First split into seasons, then calculate net for whole community
-#Calculate metrics per season, average seasons
+################################################
+### Functions needed for double permutations ###
+################################################
 
-populationNetworksAvgTime	<- function(socialData, focalList, groupsFile, allAnimals, seasonIDs, behav, behavColNum, netList){
+#socialData needs columns: date, group, focalID, actor, subject, focal_individual_id, seasonID
+#groups needs columns: date, group, animal
+populationDataPerSeason	<- function(socialData, groupsFile, seasonIDs, behav, behavColNum){
+	dataList	<- list()
 	for(i in 1:length(seasonIDs)){
 		seasonID_i	<- seasonIDs[i]
-		print(paste('Working on', seasonID_i))
+		print(paste('Working on asssembling dataset from', seasonID_i))
 
 		data		<- socialData[as.character(socialData$seasonID) == as.character(seasonID_i) &
 					 socialData[, behavColNum] == behav,]
-
-		year		<- as.numeric(strsplit(as.character(seasonID_i), split = ":")[[1]][1])
-		seasonName	<- strsplit(as.character(seasonID_i), split = ":")[[1]][2]
-		startDate	<- ifelse(seasonName == "mating", paste(year, "01-01", sep = "-"), 
-					ifelse(seasonName == "gestation",  paste(year, "04-01", sep = "-"), 
-					ifelse(seasonName == "birthing",  paste(year, "07-01", sep = "-"),
-					paste(year, "10-01", sep = "-"))))
-		stopDate	<- ifelse(seasonName == "mating", paste(year, "03-31", sep = "-"), 
-					ifelse(seasonName == "gestation",  paste(year, "06-30", sep = "-"), 
-					ifelse(seasonName == "birthing",  paste(year, "09-30", sep = "-"),
-					paste(year, "12-31", sep = "-"))))
 		
 		if(nrow(data)> 0){
 			groups	<- sort(unique(data$group))
+			#print(groups)
+			tempData_i	<- data.frame()
 			for(j in groups){
-				for(k in focals){
-					date_k	<- data[data$focalID == k, 'date']
-					animals_group_k	<- unique(groupsFile[groupsFile$groups == j & groupsFile$date == k, 'animal']
-					data_k	<- data[data$group == group_j & data$focalID == k, c('actor', 'subject', 'duration.seconds')]]
-					edges_k	<- aggregate(data$duration.seconds, by = list(data$actor, data$subject), FUN = sum)	
-			
-					## Add 0's
-					## Convert to wide
-			
+				tempData_j		<- data.frame()
+				#print(j)
+				data_group_j	<- data[data$group == j,]
+				data_group_j$focalID	<- as.character(data_group_j$focalID)
+				focals		<- sort(as.character(unique(data_group_j$focalID)))
 
-			obsMat	<- calculateObservationMatrix(focalList, groupsFile, startDate, stopDate, allAnimals)
-			behavMatAdj	<- behavMat/obsMat
-			netList[[i]]<- behavMatAdj
-			names(netList)[i]	<- as.character(seasonID_i)
+				for(k in focals){
+					#print(k)
+					#print(data_group_j)
+					date_k	<- unique(data_group_j[data_group_j$focalID == k & is.na(data_group_j$focalID) == FALSE, 'date'])
+					animals_k	<- unique(groupsFile[groupsFile$group == j & groupsFile$date == date_k, 'animal'])
+					#print(date_k)
+					#print(animals_k)
+					data_k	<- data_group_j[(data_group_j$focalID == k & is.na(data_group_j$focalID) == FALSE), c('focal_individual_id', 'actor', 'subject', 'duration')]
+					#print(data_k)
+					focal_individual_id_k	<- unique(data_k$focal_individual_id)
+					non_focals	<- animals_k[animals_k != focal_individual_id_k]
+					edges_k	<- aggregate(data_k$duration, by = list(data_k$focal_individual_id, data_k$actor, data_k$subject), FUN = sum)	
+					colnames(edges_k)	<- c('focal_individual_id', 'actor', 'subject', 'duration')
+					
+					edges_all_k_long	<- data.frame()
+					for(m in non_focals){
+						if(nrow(edges_k[edges_k$actor == focal_individual_id_k & edges_k$subject == m,]) > 0){
+							outLine	<- cbind.data.frame(k, focal_individual_id_k, m,
+								as.numeric(edges_k[edges_k$actor == focal_individual_id_k & edges_k$subject == m, 'duration']), 'out')
+						}
+						else{
+							outLine	<- cbind.data.frame(k, focal_individual_id_k, m, 0, 'out')
+						}
+						colnames(outLine)	<- c('focalID', 'focal_individual_id', 'partner', 'duration', 'direction')
+						edges_all_k_long	<- rbind.data.frame(edges_all_k_long, outLine)
+					}
+
+					for(m in non_focals){
+						if(nrow(edges_k[edges_k$actor == m & edges_k$subject == focal_individual_id_k,]) > 0){
+							inLine	<- cbind.data.frame(k, focal_individual_id_k, m,
+								as.numeric(edges_k[edges_k$actor == m & edges_k$subject == focal_individual_id_k, 'duration']), 'in')
+						}
+						else{
+							inLine	<- cbind.data.frame(k, focal_individual_id_k, m, 0, 'in')
+						}
+						colnames(inLine)	<- c('focalID', 'focal_individual_id', 'partner', 'duration', 'direction')
+						edges_all_k_long	<- rbind.data.frame(edges_all_k_long, inLine)
+					}
+						
+					edges_all_k_wide	 <- reshape(edges_all_k_long, idvar = c('focalID', 
+									'focal_individual_id', 'partner'), timevar = 'direction', direction = 'wide')
+					colnames(edges_all_k_wide)	<- c('focalID', 'focal_individual_id', 'partner', 'out', 'in')
+					edges_all_k_wide$group	<- rep(j, nrow(edges_all_k_wide))
+					tempData_j	<- rbind.data.frame(tempData_j, edges_all_k_wide)
+				}
+				tempData_i	<- rbind.data.frame(tempData_i, tempData_j)
+			}
 		}
+		dataList[[i]]	<- tempData_i
+		names(dataList)[i]	<- as.character(seasonID_i)
 	}
-	netList	<- netList[which(!sapply(netList, is.null))]
-	return(netList)
+	return(dataList)
+}			
+
+calculateNetworkFromDoubleEdgeList	<- function(dataWide, seasonID_i, focalList, groupsFile){
+	year		<- as.numeric(strsplit(as.character(seasonID_i), split = ":")[[1]][1])
+	seasonName	<- strsplit(as.character(seasonID_i), split = ":")[[1]][2]
+	startDate	<- ifelse(seasonName == "mating", paste(year, "01-01", sep = "-"), 
+				ifelse(seasonName == "gestation",  paste(year, "04-01", sep = "-"), 
+				ifelse(seasonName == "birthing",  paste(year, "07-01", sep = "-"),
+				paste(year, "10-01", sep = "-"))))
+	stopDate	<- ifelse(seasonName == "mating", paste(year, "03-31", sep = "-"), 
+				ifelse(seasonName == "gestation",  paste(year, "06-30", sep = "-"), 
+				ifelse(seasonName == "birthing",  paste(year, "09-30", sep = "-"),
+				paste(year, "12-31", sep = "-"))))
+
+	dataLong	<- reshape(dataWide, idvar = c('focalID', 'focal_individual_id', 'partner', 'group'),
+			varying = c('in', 'out'), times = c('in', 'out'), v.name = 'weight', new.row.names = 1:(2*nrow(dataWide)), direction = 'long')
+	edgeListIn	<- dataLong[dataLong$time == 'in', c('partner', 'focal_individual_id', 'weight', 'group')]
+	edgeListOut	<- dataLong[dataLong$time == 'out', c('focal_individual_id', 'partner', 'weight', 'group')]
+	edgeListAll	<- rbind.data.frame(edgeListOut, edgeListIn)
+	colnames(edgeListAll)[1:2]	<- c('actor', 'subject')
+	animals	<- sort(unique(c(unique(edgeListAll$actor), unique(edgeListAll$subject))))
+	edgeListAll	<- edgeListAll[order(edgeListAll$actor),]
+
+	net		<- graph_from_data_frame(edgeListAll, vertices = animals)
+	behavMat	<- as.matrix(as_adjacency_matrix(net, attr = 'weight'))
+
+	obsMat	<- calculateObservationMatrix(focalList, groupsFile, startDate, stopDate, names(V(net)))
+	behavMatAdj	<- behavMat/obsMat
+	comment(behavMatAdj)	<- as.character(seasonID_i)
+	return(behavMatAdj)
 }
 
 dyadID	<- function(animal1, animal2){
@@ -249,248 +330,179 @@ dyadID	<- function(animal1, animal2){
 	return(blank_IDs)
 }
 
-#Calculate the metrics for each net in list and then avg over time
+#Need columns in demo: name, sex, birthYear
+calculateCovariateMatrices	<- function(net, seasonID_i, kinship, demo){
+	year		<- as.numeric(strsplit(as.character(seasonID_i), split = ":")[[1]][1])
+	seasonName	<- strsplit(as.character(seasonID_i), split = ":")[[1]][2]
+	startDate	<- ifelse(seasonName == "mating", paste(year, "01-01", sep = "-"), 
+				ifelse(seasonName == "gestation",  paste(year, "04-01", sep = "-"), 
+				ifelse(seasonName == "birthing",  paste(year, "07-01", sep = "-"),
+				paste(year, "10-01", sep = "-"))))
+	stopDate	<- ifelse(seasonName == "mating", paste(year, "03-31", sep = "-"), 
+				ifelse(seasonName == "gestation",  paste(year, "06-30", sep = "-"), 
+				ifelse(seasonName == "birthing",  paste(year, "09-30", sep = "-"),
+				paste(year, "12-31", sep = "-"))))
 
-##Need to model all demo together
-##Need to use asnipe to do mqrap
-calculateMetricsCommunityAvgTime	<- function(netList, demoFile, kinFile){
-	metricPerSlice		<- cbind.data.frame(rep(NA, length(netList)), rep(NA, length(netList)), rep(NA, length(netList)))
-	kinEdgeList			<- get.data.frame(graph.adjacency(as.matrix(kinFile), weighted = TRUE))
-	kinEdgeList$dyadID	<- dyadID(kinEdgeList$from, kinEdgeList$to)
-	kinEdgeList			<- kinEdgeList[!duplicated(kinEdgeList$dyadID) & is.na(kinEdgeList$weight) == FALSE,]
-	kinEdgeList$weight	<- abs(kinEdgeList$weight)
-	
-	for(i in 1:length(netList)){
-		print(paste('Working on network from', as.character(names(netList)[i])))
-		#print(netList[[i]])
-		edgeList			<- get.data.frame(graph.adjacency(netList[[i]], weighted = TRUE))
-		edgeListNoNA		<- edgeList[is.nan(edgeList$weight) == FALSE,]
-		
-		edgeListDemo1		<- merge(edgeListNoNA, demoFile, by.x = 'from', by.y = 'Name', all.x = TRUE)
-		colnames(edgeListDemo1)	<- c('from', 'to', 'weight', 'fromSex', 'fromBirthYear')
-		edgeListDemo2		<- merge(edgeListDemo1, demoFile, by.x = 'to', by.y = 'Name', all.x = TRUE)
-		colnames(edgeListDemo2)	<- c('to', 'from', 'edgeWeight', 'fromSex', 'fromBirthYear', 'toSex', 'toBirthYear')
-		edgeListDemo2$dyadID	<- dyadID(edgeListDemo2$from, edgeListDemo2$to)
+	lemurYear	<- as.numeric(ifelse(seasonName == 'Lactation', year, year - 1))
 
-		edgeListDemo		<- merge(edgeListDemo2, kinEdgeList[,3:4], by.x = 'dyadID', by.y = 'dyadID', all.x = TRUE)
-		
-		edgeListDemo$sexCombo	<- dyadID(edgeListDemo$fromSex, edgeListDemo$toSex)
-		edgeListDemo$ageDiff	<- abs(as.numeric(edgeListDemo$fromBirthYear) - as.numeric(edgeListDemo$toBirthYear))
-		edgeListDemoSimp		<- edgeListDemo[,c(1, 9:11, 4)]
-		colnames(edgeListDemoSimp)	<- c('dyadID', 'kin', 'sexCombo', 'ageDiff', 'edgeWeight')
-		
-		#edgeListDemoSimp[is.na(edgeListDemoSimp$ageDiff) == TRUE, 'ageDiff']	<- NA
-		#edgeListDemoSimp[is.na(edgeListDemoSimp$sexCombo) == TRUE, 'sexCombo']	<- NA
-		#edgeListDemoSimp[is.na(edgeListDemoSimp$kin) == TRUE, 'kin']		<- NA
+	animals	<- rownames(net)
+	kinMat	<- matrix(, nrow = length(animals), ncol = length(animals), dimnames = list(animals, animals))
+	ageMat	<- matrix(, nrow = length(animals), ncol = length(animals), dimnames = list(animals, animals))
+	sexMat	<- matrix(, nrow = length(animals), ncol = length(animals), dimnames = list(animals, animals))
 
-		edgeListDemoDyadSum	<- aggregate(edgeListDemoSimp$edgeWeight, by = list(dyadID = edgeListDemoSimp$dyadID, 
-							sexCombo = edgeListDemoSimp$sexCombo, ageDiff = edgeListDemoSimp$ageDiff, kin = edgeListDemoSimp$kin), FUN = sum)
-		edgeListDemoDyadSum	<- edgeListDemoDyadSum[edgeListDemoDyadSum$x != Inf,]
-		edgeListDemoDyadSum$sexMatch	<- ifelse(edgeListDemoDyadSum$sexCombo == 'femalemale', 0, 1)
+	for(i in 1:length(animals)){
+		for(j in 1:length(animals)){
+			animal_i	<- animals[i]
+			#print(animal_i)
+			animal_j	<- animals[j]
+			#print(animal_j)
+			sex_i		<- demo[demo$name == animal_i, 'sex']
+			sex_j		<- demo[demo$name == animal_j, 'sex']
+			birthYear_i	<- as.numeric(demo[demo$name == animal_i, 'birthYear'])
+			birthYear_j	<- as.numeric(demo[demo$name == animal_j, 'birthYear'])
+			age_i		<- lemurYear - birthYear_i
+			age_j		<- lemurYear - birthYear_j
+			ageCat_i	<- ifelse(age_i == 0, 1, ifelse(
+						age_i == 1 | age_i == 2, 2, ifelse(
+						age_i == 3 | age_i == 4, 3, ifelse(
+						age_i >= 5, 4, NA))))
+			ageCat_j	<- ifelse(age_j == 0, 1, ifelse(
+						age_j == 1 | age_j == 2, 2, ifelse(
+						age_j == 3 | age_j == 4, 3, ifelse(
+						age_j >= 5, 4, NA))))
 
-		#print(edgeListDemoDyadSum)
-		if(nrow(edgeListDemoDyadSum) > 0){
-			model1	<- lm(x ~ ageDiff + sexMatch + kin, data = edgeListDemoDyadSum)
-			metricPerSlice[i, 1]	<- model1$coef[2] #age
-			metricPerSlice[i, 2]	<- model1$coef[3] #sex
-			metricPerSlice[i, 3]	<- model1$coef[4] #kinship
-		}
+			if(!(animal_i %in% demo$name)){
+				sex_i		<- NA
+				ageCat_i	<- NA
+			}
+			if(!(animal_j %in% demo$name)){
+				sex_j		<- NA
+				ageCat_j	<- NA
+			}
 
-		#print(metricPerSlice)
-	}
-	colnames(metricPerSlice)	<- c('ageCoef', 'sexCoef', 'kinCoef')
-	return(apply(metricPerSlice, 2, mean, na.rm = TRUE))
-}
-
-seasonIDs	<- enoughData[,1]
-grmNets	<- list()
-grmNets	<- populationNetworksAvgTime(socialDataMatching, focalListMatching, groups, sifakaNames, seasonIDs, "Groom", 15, grmNets)
-grmArray	<- array(unlist(grmNets), c(length(sifakaNames), length(sifakaNames), length(seasonIDs)))
-realGrmNetAvgAcrossTime	<- apply(grmArray, 1:2, mean, na.rm = TRUE)
-colnames(realGrmNetAvgAcrossTime)	<- rownames(realGrmNetAvgAcrossTime)	<- sifakaNames
-
-##Not sure why happened in 2018 and beyond
-# Calculate dyadic effects
-obsMetricsGrm	<- calculateMetricsCommunityAvgTime(grmNets, demo[,c(1, 3, 5)], abs(kinship))
-
-coef.trait 		<- realNetModel$coefficients[2]
-t.trait		<- realNetModel2$test.statistic[2]
-p.node 		<- realNetModel$P.greater[2]
-
-# Calculate data stream permutations for first step of double permutations
-networksRand 	<- dataStreamRandomizationsValued(socialData, subjects, obsmat, n.rand = 1000)
-
-# coefficients based on data stream permutations
-out <- apply(networksRand, 1, function(x) { 
-		model <- mrqap.dsp(x ~ kinship.matrix, randomisations = 1); 
-		return(c(model$coefficients[2], model$test.statistic[2])) 
-	})
-coefs.rand.data	<- out[1,]
-t.rand.data 	<- out[2,]
-p.rand.data 	<- sum(coef.trait <= coefs.rand.data)/n.perm
-p.t 			<- sum(t.trait <= t.rand.data)/n.perm
-
-# get controlled effect size
-effect.size <- coef.trait - median(coefs.rand.data)
-
-# control edge values by median of permuations
-network_median 		<- apply(networksRand, c(2,3), median)
-network_controlled 	<- realNetwork - network_median
-
-# Calculate effect from controlled data (double permutation)
-controlledNetModel 	<- mrqap.dsp(network_controlled ~ kinship.matrix, randomisations = n.perm2)
-coef.controlled	 	<- controlledNetModel$coefficients[2]
-p.node.control	 	<- controlledNetModel$P.greater[2]
-
-##################################################################
-### Calculate all time nets for each group then average groups ###
-##################################################################
-#Do analyses averaging every three months for each group, then average across group
-#netList needs to be an array of n length, m for gps
-netList	<- list()
-groupsObserved	<- unique(focalList$group)
-allTimeNetsAvgGp	<- function(socialData, focalList, groupsFile, behav, behavColNum, netList, groups, minPerGroup){
-	for(i in 1:length(groups)){
-		group_i	<- as.character(groups[i])
-		print(paste('Working on group', group_i))
-
-		groupFocalList	<- focalList[focalList$group == group_i,]
-
-		groupFocalDurationPerSeason		<- aggregate(groupFocalList$focal_duration, by = list(groupFocalList$seasonID), FUN = sum)
-		enoughData					<- groupFocalDurationPerSeason[groupFocalDurationPerSeason$x >= minPerGroup, ]
-		seasonIDs					<- as.character(unique(enoughData[,1]))
-		groupData					<- socialData[socialData$group == group_i &
-					 					socialData[, behavColNum] == behav & 
-										as.character(socialData$seasonID) %in% seasonIDs,]
-
-		focals	<- as.character(unique(groupData[,c('Focal')]))
-		init		<- as.character(unique(groupData[,c('Initiator')]))
-		recip		<- as.character(unique(groupData[,c('Receiver')]))
-		animals	<- sort(unique(c(focals, init, recip)))
-		
-		tempList	<- list()
-		for(j in 1:length(seasonIDs)){
-			seasonID_j			<- as.character(seasonIDs[j])
-			seasonGroupDataSubset	<- groupData[groupData$seasonID == seasonID_j & is.na(groupData$seasonID) == FALSE,]
-			seasonGroupFocalListSub	<- groupFocalList[groupFocalList$seasonID == seasonID_j,]
-
-			if(nrow(seasonGroupDataSubset) > 0){
-				behavMat	<- createNet(seasonGroupDataSubset$Initiator, seasonGroupDataSubset$Receiver, seasonGroupDataSubset[, behavColNum], behav,
-							subjects = animals, directional = TRUE, type = "duration", durs = seasonGroupDataSubset$Duration.Seconds)
-				
-				year		<- as.numeric(strsplit(as.character(seasonID_j), split = ":")[[1]][1])
-				seasonName	<- strsplit(as.character(seasonID_j), split = ":")[[1]][2]
-				startDate	<- ifelse(seasonName == "mating", paste(year, "01-01", sep = "-"), 
-							ifelse(seasonName == "gestation",  paste(year, "04-01", sep = "-"), 
-							ifelse(seasonName == "birthing",  paste(year, "07-01", sep = "-"),
-							paste(year, "10-01", sep = "-"))))
-				stopDate	<- ifelse(seasonName == "mating", paste(year, "03-31", sep = "-"), 
-							ifelse(seasonName == "gestation",  paste(year, "06-30", sep = "-"), 
-							ifelse(seasonName == "birthing",  paste(year, "09-30", sep = "-"),
-							paste(year, "12-31", sep = "-"))))
-
-				obsMat			<- calculateObservationMatrix(seasonGroupFocalListSub, groupsFile, startDate, stopDate, animals)
-				behavMatAdj			<- behavMat/obsMat
-				tempList[[j]]		<- as.matrix(behavMatAdj)
-				names(tempList)[j]	<- seasonID_j
+			if(animal_i %in% rownames(kinship) & animal_j %in% colnames(kinship)){
+				kinMat[i, j]	<- kinship[rownames(kinship) == animal_i, colnames(kinship) == animal_j]
+			}
+			if(is.na(sex_i) == FALSE | is.na(sex_j) == FALSE){
+				sexMat[i, j]	<- ifelse(sex_i == sex_j, 1, 0)
+			}
+			if(is.na(ageCat_i) == FALSE & is.na(ageCat_j) == FALSE){
+				ageMat[i, j]	<- ageCat_i - ageCat_j
 			}
 		}
-		netList[[i]]		<- tempList
-		names(netList)[i]		<- group_i
 	}
-	netList	<- netList[which(!sapply(netList, is.null))]
-	return(netList)
+	return(list(kinMat, ageMat, sexMat))
 }
 
-grmAllTimeAvgGrp	<- allTimeNetsAvgGp(socialDataMatching, focalListMatching, groups, "Groom", 15, netList, groupsObserved, 50)
 
-calculateMetricsAllTimeAvgGrp	<- function(netList, demoFile, kinFile){
-	metricPerSlice		<- cbind.data.frame(rep(NA, length(netList)), 3)
-	kinEdgeList			<- get.data.frame(graph.adjacency(as.matrix(kinFile), weighted = TRUE))
-	kinEdgeList$dyadID	<- dyadID(kinEdgeList$from, kinEdgeList$to)
-	kinEdgeList			<- kinEdgeList[!duplicated(kinEdgeList$dyadID) & is.na(kinEdgeList$weight) == FALSE,]
-	kinEdgeList$weight	<- abs(kinEdgeList$weight)
+##########################################################################
+### Calculate three month networks across population then average time ###
+##########################################################################
+
+#Calculate edge lists per season for permuatations
+colnames(socialDataMatching)[c(1, 2, 11:13)]	<- c('date', 'focal_individual_id', 'duration', 'actor', 'subject')
+realDataList	<- populationDataPerSeason(socialDataMatching, groupsNoVisits, enoughData[,1], 'Groom', 15)	
+
+#Convert edge lists into networks adjusted for obs time 
+realNetList	<- list()
+for(i in 1:length(realDataList)){
+	print(i)
+	realNetList[[i]]	<- calculateNetworkFromDoubleEdgeList(realDataList[[i]], names(realDataList)[i], focalListMatching, groupsNoVisits)
+	names(realNetList)[i]	<- names(realDataList)[i]
+}
+
+#Calculate covariate list
+colnames(demo)[c(1, 3, 5)]	<- c('name', 'sex', 'birthYear')
+covariateList	<- list()
+for(i in 1:length(realNetList)){
+	print(paste('Calculating covariates for', names(realNetList)[i]))
+	covars	<- calculateCovariateMatrices(realNetList[[i]], names(realNetList)[i], kinship, demo)
+	covariateList[[i]]	<- covars
+	names(covariateList)[i]	<- names(realNetList)[i]
+}
+
+# Create pre-network randomized networks (step 1 double permutation)
+nPerm	<- 1000
+permutedNets	<- list()
+for(i in 1:nPerm){
+	print(paste('Working on permutation number', i))
+	randNetList	<- list()
+	for(j in 1:length(realNetList)){
+		dataRand			<- preNetworkWeightedDirectionalRandomization(realDataList[[j]])
+		netRand			<- calculateNetworkFromDoubleEdgeList(dataRand, names(realDataList)[j], focalListMatching, groupsNoVisits)
+		randNetList[[j]]		<- netRand
+		names(realNetList)[j]	<- names(realNetList)[j]
+	}
+	permutedNets[[i]]	<- randNetList
+}
+Sys.time()
+
+##Read in objects from cluster
+#realNetList	<- readRDS('G:/My Drive/Graduate School/Research/Projects/NetworkDemographics/SocialNetworkDemographics/realNetList.rds')
+#realDataList	<- readRDS('G:/My Drive/Graduate School/Research/Projects/NetworkDemographics/SocialNetworkDemographics/realDataList.rds')
+#permutedNets	<- readRDS('G:/My Drive/Graduate School/Research/Projects/NetworkDemographics/SocialNetworkDemographics/permutedNets.rds')
+
+#Run second step of double permutation
+perSeasonDoublePermResults	<- matrix(, nrow = length(realDataList), ncol = 6, dimnames = list(names(realDataList), c('Coef kin', 'P kin', 'Coef age', 'P age', 'Coef sex', 'P sex')))
+for(i in 1:length(realNetList)){ #Run for each time point, then average at end
+	print(paste('Now working on 2nd step of permutations for network', names(realNetList)[i]))
+
+	# Calculate effects
+	modelReal	<- mrqap.dsp(realNetList[[i]] ~ covariateList[[i]][[1]] + covariateList[[i]][[2]] + covariateList[[i]][[3]], randomisations = nPerm, directed = 'directed')
+	coef.raw.kin	<- modelReal$coefficients[2]
+	coef.raw.age	<- modelReal$coefficients[3]
+	coef.raw.sex	<- modelReal$coefficients[4]
+
+	# coefficients based on data permutations
+	out	<- matrix(, nrow = 6, ncol = nPerm)
+	for(j in 1:nPerm){
+		modelRand	<- mrqap.dsp(permutedNets[[j]][[i]] ~ covariateList[[i]][[1]] + covariateList[[i]][[2]] + covariateList[[i]][[3]], randomisations = 1, directed = 'directed')
+		out[1, j]	<- modelRand$coefficients[2]		#coef kin
+		out[2, j]	<- modelRand$test.statistic[2]	#t kin
+		out[3, j]	<- modelRand$coefficients[3]		#coef age
+		out[4, j]	<- modelRand$test.statistic[3]	#t age
+		out[5, j]	<- modelRand$coefficients[4]		#coef sex
+		out[6, j]	<- modelRand$test.statistic[4]		#t sex
+	}
+	coefs.rand.data.kin	<- out[1,]
+	coefs.rand.data.age	<- out[3,]
+	coefs.rand.data.sex	<- out[5,]
 	
-	for(i in 1:length(netList)){
-		group_i	<- names(netList)[i]
-		print(paste('Working on group', group_i))
-		
-		netList	<- netList[which(!sapply(netList, is.null))]
+	print(paste('Finished calculating coefficients based on permutations for network', names(realNetList)[i]))
 
-		nSeasons	<- length(netList[[i]])
-		tempList	<- cbind.data.frame(rep(NA, nSeasons), 3)
+	# get controlled effect size
+	effect.size.kin <- coef.raw.kin - median(coefs.rand.data.kin)
+	effect.size.age <- coef.raw.age - median(coefs.rand.data.age)
+	effect.size.sex <- coef.raw.sex - median(coefs.rand.data.sex)
 
-		for(j in 1:nSeasons){
-			print(j)
-
-			if(is.null(netList[[i]][[j]]) == FALSE){
-				edgeList			<- get.data.frame(graph.adjacency(as.matrix(netList[[i]][[j]]), weighted = TRUE))
-				edgeListNoNA		<- edgeList[is.nan(edgeList$weight) == FALSE,]
-		
-				edgeListDemo1		<- merge(edgeListNoNA, demoFile, by.x = 'from', by.y = 'Name', all.x = TRUE)
-				colnames(edgeListDemo1)	<- c('from', 'to', 'weight', 'fromSex', 'fromBirthYear')
-				edgeListDemo2		<- merge(edgeListDemo1, demoFile, by.x = 'to', by.y = 'Name', all.x = TRUE)
-				colnames(edgeListDemo2)	<- c('to', 'from', 'edgeWeight', 'fromSex', 'fromBirthYear', 'toSex', 'toBirthYear')
-				edgeListDemo2$dyadID	<- dyadID(edgeListDemo2$from, edgeListDemo2$to)
-
-				edgeListDemo		<- merge(edgeListDemo2, kinEdgeList[,3:4], by.x = 'dyadID', by.y = 'dyadID', all.x = TRUE)
-			
-				edgeListDemo$sexCombo	<- dyadID(edgeListDemo$fromSex, edgeListDemo$toSex)
-				edgeListDemo$ageDiff	<- abs(as.numeric(edgeListDemo$fromBirthYear) - as.numeric(edgeListDemo$toBirthYear))
-				edgeListDemoSimp		<- edgeListDemo[,c(1, 9:11, 4)]
-				colnames(edgeListDemoSimp)	<- c('dyadID', 'kin', 'sexCombo', 'ageDiff', 'edgeWeight')
-		
-				edgeListDemoSimp[is.na(edgeListDemoSimp$ageDiff) == TRUE, 'ageDiff']	<- 'unk'
-				edgeListDemoSimp[is.na(edgeListDemoSimp$sexCombo) == TRUE, 'sexCombo']	<- 'unk'
-				edgeListDemoSimp[is.na(edgeListDemoSimp$kin) == TRUE, 'kin']		<- 'unk'
-			
-				edgeListDemoDyadSum	<- aggregate(edgeListDemoSimp$edgeWeight, by = list(dyadID = edgeListDemoSimp$dyadID, 
-									sexCombo = edgeListDemoSimp$sexCombo, ageDiff = edgeListDemoSimp$ageDiff, kin = edgeListDemoSimp$kin), FUN = sum)
-				edgeListDemoDyadSum	<- edgeListDemoDyadSum[edgeListDemoDyadSum$x != Inf,]
-				edgeListDemoDyadSum$sexMatch	<- ifelse(edgeListDemoDyadSum$sexCombo == 'femalemale', 0, 1)
-
-				model1	<- lm(x ~ ageDiff, data = edgeListDemoDyadSum)
-				tempList[j, 1]	<- model1$coef[2] #age
-				tempList[j, 2]	<- model1$coef[3] #sex
-				tempList[j, 3]	<- model1$coef[4] #kinship
-			}
-		}
-		metricPerSlice[i, 1]	<- mean(tempList[,1])
-		metricPerSlice[i, 2]	<- mean(tempList[,2])
-		metricPerSlice[i, 3]	<- mean(tempList[,3])
+	# control edge values by median of permuations 
+	permutedNetsSeason_iList	<- list()
+	for(j in 1:nPerm){
+		permutedNetsSeason_iList[[j]]	<- as.matrix(permutedNets[[j]][[i]])
 	}
-	colnames(metricPerSlice)	<- c('ageCoef', 'sexCoef', 'kinCoef')
-	return(apply(metricPerSlice, 2, mean, na.rm = TRUE))
-}
+	###Fix this line#####
+	network_median		<- median(as.numeric(lapply(permutedNetsSeason_iList, median, na.rm = TRUE)))
+	network_controlled	<- as.matrix(realNetList[[i]]) - network_median
 
-obsMetricsGrm	<- calculateMetricsAllTimeAvgGrp(grmAllTimeAvgGrp, demo[,c(1, 3, 5)], abs(kinship))
+	# Calculate effect from controlled data (double permutation)
+	modelControlled	<- mrqap.dsp(network_controlled ~ covariateList[[i]][[1]] + covariateList[[i]][[2]] + covariateList[[i]][[3]], randomisations = nPerm, directed = 'directed')
+	coef.controlled.kin	<- modelControlled$coefficients[2]
+	p.node.control.kin	<- modelControlled$P.greater[2]
+	coef.controlled.age	<- modelControlled$coefficients[3]
+	p.node.control.age	<- modelControlled$P.greater[3]
+	coef.controlled.sex	<- modelControlled$coefficients[4]
+	p.node.control.sex	<- modelControlled$P.greater[4]
 
-
-#################################################
-### Calculate Edge Differentiability and plot ###
-#################################################
-
-edgeDiffSummary	<- data.frame(group = character(), period = character(), year = character(), nAnimals = numeric(), edgeDiff = numeric())
-for(i in 1:length(listNets)){
-	#print(names(listNets)
-	group		<- str_split(names(listNets)[i], '-')[[1]][1]
-	#print(class(group))
-	year		<- str_split(names(listNets)[i], '-')[[1]][2]
-	#print(class(year))
-	season	<- str_split(names(listNets)[i], '-')[[1]][3]
-	noDiag	<- diag.remove(listNets[[i]])
-	edgeDiff	<- sd(noDiag, na.rm = TRUE)/mean(noDiag, na.rm = TRUE)
-	n		<- dim(noDiag)[1]
-	#print(class(n))
-	#print(class(edgeDiff))
-	line		<- c(group, season, year, as.numeric(n), as.numeric(edgeDiff))
-	edgeDiffSummary	<- rbind(edgeDiffSummary, line)
-	colnames(edgeDiffSummary)	<- c('group', 'period', 'year', 'nAnimals', 'edgeDiff')
-	edgeDiffSummary$group		<- as.character(edgeDiffSummary$group)	
-	edgeDiffSummary$year		<- as.character(edgeDiffSummary$year)	
-	edgeDiffSummary$period		<- as.character(edgeDiffSummary$period)	
-	edgeDiffSummary$nAnimals	<- as.character(edgeDiffSummary$nAnimals)	
-	edgeDiffSummary$edgeDiff	<- as.character(edgeDiffSummary$edgeDiff)	
+	#Save in results matrix
+	perSeasonDoublePermResults[i, 1]	<- coef.controlled.kin
+	perSeasonDoublePermResults[i, 2]	<- p.node.control.kin
+	perSeasonDoublePermResults[i, 3]	<- coef.controlled.age
+	perSeasonDoublePermResults[i, 4]	<- p.node.control.age
+	perSeasonDoublePermResults[i, 5]	<- coef.controlled.sex
+	perSeasonDoublePermResults[i, 6]	<- p.node.control.sex
 
 }
 
+Sys.time()
+
+meanResults	<- apply(perSeasonDoublePermResults, 2, mean, na.rm = TRUE)
