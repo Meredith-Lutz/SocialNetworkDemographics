@@ -1,18 +1,22 @@
 #################################################
 ##### Long term network demographics - KMNP #####
-#####      Last updated by ML 6/20/2022     #####
+#####      Last updated by ML 7/20/2022     #####
 #################################################
-setwd('G:/My Drive/Graduate School/Research/Projects/KMNPLongTermData/NSF Analyses')
+#setwd('G:/My Drive/Graduate School/Research/Projects/KMNPLongTermData/NSF Analyses')
+setwd('C:/Users/mclutz/Documents/KMNP_Demographics')
 
 library(stringr)
 library(lme4)
 library(lubridate)
 library(igraph)
+library(sna)
 library(asnipe)
 
-source('G:/My Drive/Graduate School/Research/Projects/KMNPLongTermData/NSF Analyses/NSFSocialNetwork/ObservationTimeFunctions.R')
+#source('G:/My Drive/Graduate School/Research/Projects/KMNPLongTermData/NSF Analyses/NSFSocialNetwork/ObservationTimeFunctions.R')
+source('C:/Users/mclutz/Documents/KMNP_Demographics/ObservationTimeFunctions.R')
+source('C:/Users/mclutz/Documents/KMNP_Demographics/smallNetworkDoublePermuationsWeightedDirectional.R')
 
-socialDataRaw		<- read.csv('All_nonSuppStudent_Social_Data_through_2019_2022_06_09_MLWithFocalID.csv', stringsAsFactors = FALSE)
+socialDataRaw		<- read.csv('allSocialDataWithFocalIDs2022-08-07_ML.csv', stringsAsFactors = FALSE)
 groups			<- read.csv('Compiled Group File with some data deleted for BL analysis_Nov 3 2021_ML Corrected11Nov2021_NoBlanks.csv', stringsAsFactors = FALSE)
 nnFocalList			<- read.csv('NearestNeighborIDs_TMM_ML_01Dec2021.csv', stringsAsFactors = FALSE)
 actvFocalList		<- read.csv('FocalActivityIDs_TMM_ML_01Dec2021.csv', stringsAsFactors = FALSE)
@@ -84,6 +88,10 @@ socialData$yearMonth	<- paste(socialData$Year, socialData$monthNum, sep = '-')
 #Remove ad-lib/all occurances lines
 socialData	<- socialData[socialData$Receiver == socialData$Focal | socialData$Initiator == socialData$Focal,]
 
+#For avg group size
+census	<- groups[groups$dataset == 'Census',]
+animalPerGroup	<- aggregate(census$animal, by = list(date = census$date, group = census$group), FUN = length)
+animalPerGroupStudyGroup	<- animalPerGroup[animalPerGroup$group %in% c('I', 'II', 'III', 'IV', 'V', 'VI', 'XI', 'XII') & animalPerGroup$x > 1,]
 ######################################################
 ### Combine Focal Lists and Create Observation MAT ###
 ######################################################
@@ -183,9 +191,25 @@ focalListMatching$start_time 		<- as.POSIXlt(focalListMatching$start_time, forma
 focalListMatching$stop_time 		<- as.POSIXlt(focalListMatching$stop_time, format = "%H:%M:%S")
 focalListMatching$focal_duration	<- focalListMatching$stop_time - focalListMatching$start_time
 
-focalDurationPerSeason		<- aggregate(focalListMatching$focal_duration, by = list(focalListMatching$seasonID), FUN = sum)
-minimumTotalFocalDuration	<- 600
-enoughData				<- focalDurationPerSeason[focalDurationPerSeason$x>=minimumTotalFocalDuration,]
+focalDurationPerSeason				<- aggregate(focalListMatching$focal_duration, by = list(focalListMatching$seasonID), FUN = sum)
+focalDurationPerGroup				<- aggregate(focalListMatching$focal_duration, by = list(focalListMatching$group), FUN = sum)
+focalDurationPerSeasonPerGroup		<- aggregate(focalListMatching$focal_duration, by = list(season = focalListMatching$seasonID, group = focalListMatching$group), FUN = sum)
+
+minimumTotalFocalDuration	<- 300
+
+enoughDataPerSeasonPerGroup	<- focalDurationPerSeasonPerGroup[focalDurationPerSeasonPerGroup$x >= minimumTotalFocalDuration &
+							focalDurationPerSeasonPerGroup$group %in% c('I', 'II', 'III', 'IV', 'V', 'VI', 'XI', 'XII'),]
+enoughData				<- aggregate(enoughDataPerSeasonPerGroup$x, by = list(enoughDataPerSeasonPerGroup$season), FUN = sum)
+nGroupsPerSeason			<- aggregate(enoughDataPerSeasonPerGroup$x, by = list(enoughDataPerSeasonPerGroup$season), FUN = length)
+nSeasonsPerGroup			<- aggregate(enoughDataPerSeasonPerGroup$x, by = list(enoughDataPerSeasonPerGroup$group), FUN = length)
+
+png('enoughDataPerGroup.png', width = 750, height = 750) 
+hist(as.numeric(enoughDataPerSeasonPerGroup$x)/60, xlab = 'Hours of Observation Per Group Per Season', col = 'midnightblue', cex.axis = 1.5, cex.lab = 1.5, main = NA)
+dev.off()
+
+png('enoughDataPopulation.png', width = 750, height = 750) 
+hist(as.numeric(enoughData$x)/60, xlab = 'Population Hours of Observation Per Season', col = 'midnightblue', cex.axis = 1.5, cex.lab = 1.5, main = NA)
+dev.off()
 
 ###########################################
 ### Generate example dataset for Damien ###
@@ -385,6 +409,7 @@ calculateCovariateMatrices	<- function(net, seasonID_i, kinship, demo){
 			}
 			if(is.na(sex_i) == FALSE | is.na(sex_j) == FALSE){
 				sexMat[i, j]	<- ifelse(sex_i == sex_j, 1, 0)
+				#sexMat[i, j]	<- paste(sex_i, sex_j, sep = ":")
 			}
 			if(is.na(ageCat_i) == FALSE & is.na(ageCat_j) == FALSE){
 				ageMat[i, j]	<- ageCat_i - ageCat_j
@@ -394,6 +419,37 @@ calculateCovariateMatrices	<- function(net, seasonID_i, kinship, demo){
 	return(list(kinMat, ageMat, sexMat))
 }
 
+nodePermutationWithinGroup	<- function(network, seasonID, groupsFile){
+	animals		<- names(V(graph_from_adjacency_matrix(network)))
+	year			<- as.numeric(strsplit(as.character(seasonID), split = ":")[[1]][1])
+	seasonName		<- strsplit(as.character(seasonID), split = ":")[[1]][2]
+	startDate		<- ifelse(seasonName == "mating", paste(year, "01-01", sep = "-"), 
+					ifelse(seasonName == "gestation",  paste(year, "04-01", sep = "-"), 
+					ifelse(seasonName == "birthing",  paste(year, "07-01", sep = "-"),
+					paste(year, "10-01", sep = "-"))))
+	stopDate		<- ifelse(seasonName == "mating", paste(year, "03-31", sep = "-"), 
+					ifelse(seasonName == "gestation",  paste(year, "06-30", sep = "-"), 
+					ifelse(seasonName == "birthing",  paste(year, "09-30", sep = "-"),
+					paste(year, "12-31", sep = "-"))))
+	groupsFileSub	<- groupsFile[groupsFile$date >= startDate & groupsFile$date <= stopDate,]
+
+	#convert NaN to NA
+	network[is.nan(network)]	<- 0
+	net					<- graph_from_adjacency_matrix(network, mode = 'directed', weighted = TRUE, diag = FALSE)
+	
+	groups	<- c()
+	for(i in 1:length(animals)){
+		animal_i_daily_groups	<- groupsFileSub[groupsFileSub$animal == animals[i],]
+		animal_i_group		<- names(sort(table(animal_i_daily_groups$group), decreasing = TRUE)[1])
+		groups[i]	<- animal_i_group
+	}
+	
+	newGroups	<- rperm(groups)
+	newNet	<- igraph::permute(net, newGroups)
+	
+	newMat	<- as_adjacency_matrix(newNet, attr = 'weight', sparse = FALSE, names = TRUE)
+	return(newMat)
+}
 
 ##########################################################################
 ### Calculate three month networks across population then average time ###
@@ -443,12 +499,21 @@ Sys.time()
 #permutedNets	<- readRDS('G:/My Drive/Graduate School/Research/Projects/NetworkDemographics/SocialNetworkDemographics/permutedNets.rds')
 
 #Run second step of double permutation
+workingNets		<- c(1:13, 15:16, 18:30)
 perSeasonDoublePermResults	<- matrix(, nrow = length(realDataList), ncol = 6, dimnames = list(names(realDataList), c('Coef kin', 'P kin', 'Coef age', 'P age', 'Coef sex', 'P sex')))
-for(i in 1:length(realNetList)){ #Run for each time point, then average at end
+for(i in workingNets){ #Run for each time point, then average at end
 	print(paste('Now working on 2nd step of permutations for network', names(realNetList)[i]))
 
+	# Force exchanges to happen within group only
+	animals		<- names(V(graph_from_adjacency_matrix(realNetList[[i]])))
+	rawRand	<- array(, dim = c(nPerm, length(animals), length(animals)))
+	seasonID	<- names(realDataList[i])
+	for(k in 1:nPerm){
+		rawRand[k, ,]	<- nodePermutationWithinGroup(realNetList[[i]], seasonID, groupsNoVisits)
+	}
+
 	# Calculate effects
-	modelReal	<- mrqap.dsp(realNetList[[i]] ~ covariateList[[i]][[1]] + covariateList[[i]][[2]] + covariateList[[i]][[3]], randomisations = nPerm, directed = 'directed')
+	modelReal		<- mrqap.custom.null(realNetList[[i]] ~ covariateList[[i]][[1]] + covariateList[[i]][[2]] + covariateList[[i]][[3]], rawRand)
 	coef.raw.kin	<- modelReal$coefficients[2]
 	coef.raw.age	<- modelReal$coefficients[3]
 	coef.raw.sex	<- modelReal$coefficients[4]
@@ -462,7 +527,7 @@ for(i in 1:length(realNetList)){ #Run for each time point, then average at end
 		out[3, j]	<- modelRand$coefficients[3]		#coef age
 		out[4, j]	<- modelRand$test.statistic[3]	#t age
 		out[5, j]	<- modelRand$coefficients[4]		#coef sex
-		out[6, j]	<- modelRand$test.statistic[4]		#t sex
+		out[6, j]	<- modelRand$test.statistic[4]	#t sex
 	}
 	coefs.rand.data.kin	<- out[1,]
 	coefs.rand.data.age	<- out[3,]
@@ -475,17 +540,24 @@ for(i in 1:length(realNetList)){ #Run for each time point, then average at end
 	effect.size.age <- coef.raw.age - median(coefs.rand.data.age)
 	effect.size.sex <- coef.raw.sex - median(coefs.rand.data.sex)
 
-	# control edge values by median of permuations 
+	# control edge values by median of permuations
+	nAnimals	<- ncol(as.matrix(permutedNets[[1]][[i]]))
 	permutedNetsSeason_iList	<- list()
 	for(j in 1:nPerm){
 		permutedNetsSeason_iList[[j]]	<- as.matrix(permutedNets[[j]][[i]])
 	}
-	###Fix this line#####
-	network_median		<- median(as.numeric(lapply(permutedNetsSeason_iList, median, na.rm = TRUE)))
+	permutedNetsSeason_iArray	<- array(unlist(permutedNetsSeason_iList), dim = c(nAnimals, nAnimals, nPerm))
+	
+	network_median		<- apply(permutedNetsSeason_iArray, c(1, 2), median, na.rm = TRUE)
 	network_controlled	<- as.matrix(realNetList[[i]]) - network_median
 
+	controlRand			<- array(, dim = c(nPerm, length(animals), length(animals)))
+	for(m in 1:nPerm){
+		controlRand[m, ,]	<- nodePermutationWithinGroup(network_controlled, seasonID, groupsNoVisits)
+	}
+
 	# Calculate effect from controlled data (double permutation)
-	modelControlled	<- mrqap.dsp(network_controlled ~ covariateList[[i]][[1]] + covariateList[[i]][[2]] + covariateList[[i]][[3]], randomisations = nPerm, directed = 'directed')
+	modelControlled	<- mrqap.custom.null(network_controlled ~ covariateList[[i]][[1]] + covariateList[[i]][[2]] + covariateList[[i]][[3]], controlRand, directed = 'directed')
 	coef.controlled.kin	<- modelControlled$coefficients[2]
 	p.node.control.kin	<- modelControlled$P.greater[2]
 	coef.controlled.age	<- modelControlled$coefficients[3]
@@ -506,3 +578,13 @@ for(i in 1:length(realNetList)){ #Run for each time point, then average at end
 Sys.time()
 
 meanResults	<- apply(perSeasonDoublePermResults, 2, mean, na.rm = TRUE)
+
+perSeason	<- read.csv('G:/My Drive/Graduate School/Research/Projects/NetworkDemographics/nonDirectionalSex.csv')
+perSeason$season	<- as.character(data.frame(strsplit(perSeason$X, ":"))[2,])
+perSeason$year	<- as.numeric(data.frame(strsplit(perSeason$X, ":"))[1,])
+
+perSeasonNoNA	<- perSeason[is.na(perSeason$P.kin) == FALSE,]
+
+boxplot(perSeasonNoNA$P.kin ~ as.factor(perSeasonNoNA$season)) #No effect
+boxplot(perSeasonNoNA$P.age ~ as.factor(perSeasonNoNA$season)) #increase distance, increase grm
+boxplot(perSeasonNoNA$P.sex ~ as.factor(perSeasonNoNA$season)) #grm more w/ like sex
